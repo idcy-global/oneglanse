@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { NotFoundError, PermissionError } from "@oneglanse/errors";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const container = `oneglanse-tenant-test-${process.pid}-${Date.now()}`;
 const password = "tenant-test-password";
@@ -55,8 +55,7 @@ beforeAll(async () => {
 	if (!mappedPort) throw new Error("Missing PostgreSQL port");
 
 	process.env.NODE_ENV = "test";
-	process.env.DATABASE_URL =
-		`postgresql://postgres:${password}@127.0.0.1:${mappedPort}/${databaseName}`;
+	process.env.DATABASE_URL = `postgresql://postgres:${password}@127.0.0.1:${mappedPort}/${databaseName}`;
 
 	databaseModule = await import("@oneglanse/db");
 	await waitForDatabase(databaseModule.pool);

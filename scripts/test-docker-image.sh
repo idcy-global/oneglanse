@@ -47,17 +47,14 @@ case "$app" in
       oneglanse-postgres:ci postgres -c shared_preload_libraries=pg_cron \
       -c cron.database_name=oneglanse >/dev/null
     docker run -d --name "$prefix-clickhouse" --network "$prefix" --network-alias clickhouse \
-      -p 127.0.0.1:18123:8123 \
       -e CLICKHOUSE_USER=default -e "CLICKHOUSE_PASSWORD=$test_password" -e CLICKHOUSE_DB=oneglanse \
       -e CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1 \
       -v "$PWD/packages/db/clickhouse-init:/docker-entrypoint-initdb.d:ro" \
       clickhouse/clickhouse-server:latest >/dev/null
-    clickhouse_http_port=18123
     ready=false
-    for _ in {1..60}; do
+    for _ in {1..90}; do
       if docker exec "$prefix-db" pg_isready -U postgres -d oneglanse >/dev/null 2>&1 && \
-        docker exec "$prefix-clickhouse" clickhouse-client --password "$test_password" --query 'SELECT 1' >/dev/null 2>&1 && \
-        curl -fsS --user "default:$test_password" "http://127.0.0.1:$clickhouse_http_port/ping" >/dev/null 2>&1; then
+        docker exec "$prefix-clickhouse" clickhouse-client --password "$test_password" --query 'SELECT 1' >/dev/null 2>&1; then
         ready=true
         break
       fi

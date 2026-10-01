@@ -25,8 +25,7 @@ export const metadata: Metadata = {
 	twitter: {
 		card: "summary_large_image",
 		title: productName,
-		description:
-			"Track how your brand appears in ChatGPT, Gemini, Perplexity, Claude, and AI Overview.",
+		description: productDescription,
 		images: ["/twitter-image"],
 	},
 };

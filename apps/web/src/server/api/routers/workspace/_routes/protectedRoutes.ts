@@ -69,6 +69,14 @@ export const protectedWorkspaceRoutes = {
 				userId,
 			});
 
+			// The commercial tenant guard requires an explicit active Organization.
+			// Keep upstream organization creation behavior, then activate only after
+			// the Workspace has been created successfully.
+			await auth.api.setActiveOrganization({
+				body: { organizationId: org.id },
+				headers,
+			});
+
 			return { workspace, org, isFirstWorkspace };
 		}),
 

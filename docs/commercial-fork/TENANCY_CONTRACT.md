@@ -15,3 +15,5 @@ Workspace is the brand/project boundary.
 Client-supplied Workspace IDs, Organization IDs, URL/query values, local-storage values, and hidden UI controls are never authorization.
 
 Critical regression case: a user may legitimately belong to multiple Organizations and multiple Workspaces. Membership in Workspace B must not authorize Workspace B while Organization A is the active Organization.
+
+<!-- CI trigger marker: Stage 0-2 validation after Actions enablement -->

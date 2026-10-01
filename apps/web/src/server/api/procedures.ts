@@ -11,7 +11,8 @@ import { t } from "./trpc";
 
 const baseProcedure = t.procedure.use(errorMappingMiddleware);
 export const protectedProcedure = baseProcedure.use(isAuthenticated);
-export const authorizedOrganizationProcedure = protectedProcedure.use(validOrganization);
+export const authorizedOrganizationProcedure =
+	protectedProcedure.use(validOrganization);
 export const authorizedWorkspaceProcedure = protectedProcedure
 	.input(schema.workspaceInput)
 	.use(validWorkspace);

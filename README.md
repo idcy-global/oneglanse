@@ -1,4 +1,8 @@
-> **Commercial fork note:** this branch is derived from OneGlanse under the MIT License.\n> User-facing branding and SaaS tenancy controls are being adapted for a commercial GEO platform.\n> Upstream attribution is intentionally preserved.\n\n<h1 align="center">OneGlanse</h1>
+> **Commercial fork note:** this branch is derived from OneGlanse under the MIT License.
+> User-facing branding and SaaS tenancy controls are being adapted for a commercial GEO platform.
+> Upstream attribution is intentionally preserved.
+
+<h1 align="center">OneGlanse</h1>
 
 <p align="center"><strong>Free, open-source AI visibility tracking for marketing teams.</strong></p>
 

@@ -26,7 +26,9 @@ export async function getWorkspace(): Promise<Workspace | null> {
 
 	if (workspaces.length === 0) return null;
 
-	return [...workspaces].sort(
-		(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-	)[0] ?? null;
+	return (
+		[...workspaces].sort(
+			(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+		)[0] ?? null
+	);
 }

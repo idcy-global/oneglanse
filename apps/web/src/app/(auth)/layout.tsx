@@ -1,7 +1,7 @@
 import "../../styles/globals.css";
 import { appIcons } from "@/lib/app-metadata";
-import { productDescription, productName } from "@/lib/product-brand";
 import { auth } from "@/lib/auth/auth";
+import { productDescription, productName } from "@/lib/product-brand";
 import { readProviderConnectionsState } from "@/lib/provider-connections/server";
 import { getWorkspace } from "@/lib/workspace/getWorkspace";
 import { TRPCReactProvider } from "@/trpc/react";
@@ -46,7 +46,6 @@ export default async function RootLayout({
 	if (!session) {
 		return redirect("/login");
 	}
-
 
 	const cookieStore = await cookies();
 	const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";

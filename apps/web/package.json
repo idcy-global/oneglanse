@@ -12,7 +12,7 @@
 		"preview": "next build && next start",
 		"start": "next start",
 		"typecheck": "node -e \"require('node:fs').rmSync('.next/types',{recursive:true,force:true})\" && next typegen && tsc --noEmit --incremental false",
-		"lint": "biome check .",
+		"lint": "biome check . --diagnostic-level=error",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:push": "drizzle-kit push",

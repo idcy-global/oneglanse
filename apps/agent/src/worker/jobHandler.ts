@@ -12,6 +12,7 @@ import type {
 	AgentResult,
 	AuthProvider,
 	ModelResult,
+	PromptCaptureMetadata,
 	PromptPayload,
 	Provider,
 } from "@oneglanse/types";
@@ -187,6 +188,9 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 		created_at: executionTime,
 	};
 	const providerResults = buildEmptyResults();
+	const captureMetadataByProvider: Partial<
+		Record<Provider, PromptCaptureMetadata>
+	> = {};
 
 	registerActiveProviderStop(jobGroupId, provider, async () => {
 		stopController.abort();
@@ -230,6 +234,17 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 				},
 			});
 			const result = execution.results;
+			captureMetadataByProvider[provider] = {
+				adapterId: execution.adapterId,
+				captureType: execution.captureType,
+				model: execution.model,
+				region: execution.region,
+				locale: execution.locale,
+				startedAt: execution.startedAt,
+				completedAt: execution.completedAt,
+				estimatedCostUsd: execution.estimatedCostUsd,
+				jobGroupId,
+			};
 
 			// Browser execution may return partial/empty results after an abort;
 			// check the shared signal here so the job is still marked as stopped.
@@ -285,6 +300,7 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 					userId: user_id,
 					workspaceId: workspace_id,
 					promptRunAt: executionTime,
+					captureMetadata: captureMetadataByProvider,
 				});
 			} catch (storeErr) {
 				// Extraction succeeded but save failed — log prominently but do not

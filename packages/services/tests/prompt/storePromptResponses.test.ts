@@ -9,7 +9,7 @@ function resultsWithChatGptResponse(): ModelResult {
 			provider,
 			{ status: "rejected" as const, data: [] },
 		]),
-	) as ModelResult;
+	) as unknown as ModelResult;
 
 	results.chatgpt = {
 		status: "fulfilled",
@@ -22,7 +22,8 @@ function resultsWithChatGptResponse(): ModelResult {
 				response: "Example response",
 				sources: [
 					{
-						title: "Example",
+							title: "Example",
+						cited_text: "Example citation",
 						url: "https://example.com/source",
 						domain: "example.com",
 					},

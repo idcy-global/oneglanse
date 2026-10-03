@@ -14,6 +14,7 @@ COPY package.json turbo.json tsconfig.json ./
 COPY apps/agent ./apps/agent
 COPY packages/db ./packages/db
 COPY packages/errors ./packages/errors
+COPY packages/providers ./packages/providers
 COPY packages/services ./packages/services
 COPY packages/types ./packages/types
 COPY packages/utils ./packages/utils

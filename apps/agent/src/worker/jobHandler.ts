@@ -18,9 +18,7 @@ import type {
 import { AUTH_PROVIDER_LIST, PROVIDER_LIST } from "@oneglanse/types";
 import { createProviderLogger, logger } from "@oneglanse/utils";
 import type { Job } from "bullmq";
-import { agentHandler } from "../core/agentHandler.js";
-import { createAgent } from "../core/createAgent.js";
-import { PROVIDER_CONFIGS } from "../core/providers/index.js";
+import { providerRouter } from "../provider-adapters/index.js";
 import { StopProviderRunError } from "../lib/browser/proxy/runner.js";
 import { runAnalysisInBackground } from "./analysis.js";
 
@@ -137,9 +135,14 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 
 	const progressKey = `job:${jobGroupId}:result`;
 	await ensureProgressSeed(progressKey, ownedProviders, prompts.length);
-	const hasAuth = await hasRuntimeProviderAuth(provider);
-	if (!hasAuth) {
-		plog.warn("skipped (no authenticated session)");
+
+	const executionAdapter = providerRouter.resolve({
+		provider,
+		includeDisabled: true,
+	});
+
+	if (!executionAdapter.enabled) {
+		plog.warn(`skipped (adapter disabled: ${executionAdapter.adapterId})`);
 		await Promise.all(
 			ownedProviders.map((currentProvider) =>
 				updateProviderProgress({
@@ -153,23 +156,22 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 		return true;
 	}
 
-	if (
-		ownedProviders.some(
-			(currentProvider) => PROVIDER_CONFIGS[currentProvider].skip,
-		)
-	) {
-		plog.warn("skipped (skip: true in providerRegistry)");
-		await Promise.all(
-			ownedProviders.map((currentProvider) =>
-				updateProviderProgress({
-					jobGroupId,
-					provider: currentProvider,
-					status: "failed",
-					resultCount: 0,
-				}),
-			),
-		);
-		return true;
+	if (executionAdapter.capabilities.authMode === "browser-session") {
+		const hasAuth = await hasRuntimeProviderAuth(provider);
+		if (!hasAuth) {
+			plog.warn("skipped (no authenticated browser session)");
+			await Promise.all(
+				ownedProviders.map((currentProvider) =>
+					updateProviderProgress({
+						jobGroupId,
+						provider: currentProvider,
+						status: "failed",
+						resultCount: 0,
+					}),
+				),
+			);
+			return true;
+		}
 	}
 
 	const stopController = new AbortController();
@@ -184,7 +186,6 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 		})),
 		created_at: executionTime,
 	};
-	const label = PROVIDER_CONFIGS[provider].label;
 	const providerResults = buildEmptyResults();
 
 	registerActiveProviderStop(jobGroupId, provider, async () => {
@@ -211,35 +212,27 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 				throw new StopProviderRunError(provider);
 			}
 
-			const result = await agentHandler(
-				label,
-				() => createAgent(provider),
-				payload,
-				provider,
-				{
-					signal: stopController.signal,
-					onAttemptStart: (attempt) => {
-						activeAttemptCleanup = async () => {
-							await attempt.context.close().catch(() => {});
-							await attempt.cleanup?.().catch(() => {});
-						};
-					},
-					onAttemptComplete: () => {
-						activeAttemptCleanup = null;
-					},
-					onPromptProgress: async (current) => {
-						await updateProviderProgress({
-							jobGroupId,
-							provider,
-							status: "running",
-							resultCount: current,
-						});
-					},
+			const execution = await executionAdapter.execute(payload, {
+				signal: stopController.signal,
+				registerCancelHandler: (handler) => {
+					activeAttemptCleanup = handler;
 				},
-			);
+				clearCancelHandler: () => {
+					activeAttemptCleanup = null;
+				},
+				onPromptProgress: async (current) => {
+					await updateProviderProgress({
+						jobGroupId,
+						provider,
+						status: "running",
+						resultCount: current,
+					});
+				},
+			});
+			const result = execution.results;
 
-			// agentHandler handles StopProviderRunError internally and returns
-			// partial/empty results — check signal here to still mark as stopped.
+			// Browser execution may return partial/empty results after an abort;
+			// check the shared signal here so the job is still marked as stopped.
 			if (stopController.signal.aborted) {
 				throw new StopProviderRunError(provider);
 			}

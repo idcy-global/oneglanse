@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
 import { PROVIDER_LIST } from "@oneglanse/types";
-import { providerRegistry, providerRouter } from "../../src/provider-adapters/index.js";
+import { describe, expect, it } from "vitest";
+import {
+	providerRegistry,
+	providerRouter,
+} from "../../src/provider-adapters/index.js";
 
 describe("provider layer", () => {
 	it("registers one browser adapter for every existing runtime provider", () => {

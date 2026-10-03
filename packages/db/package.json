@@ -15,6 +15,7 @@
 	"scripts": {
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
+		"clickhouse:migrate": "node scripts/migrate-clickhouse.mjs",
 		"db:push": "drizzle-kit push",
 		"db:studio": "drizzle-kit studio",
 		"build": "tsc",

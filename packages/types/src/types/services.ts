@@ -1,5 +1,5 @@
 import type { DomainStats, SourceGroupResult } from "./sources.js";
-import type { ModelResult } from "./agent.js";
+import type { ModelResult, PromptCaptureMetadata, Provider } from "./agent.js";
 
 export interface CreateWorkspaceForTenantArgs {
 	name: string;
@@ -71,6 +71,7 @@ export interface StorePromptResponsesArgs {
 	userId: string;
 	workspaceId: string;
 	promptRunAt: string;
+	captureMetadata?: Partial<Record<Provider, PromptCaptureMetadata>>;
 }
 
 export interface FetchPromptResponsesForWorkspaceArgs {

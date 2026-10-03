@@ -19,6 +19,7 @@
 	"references": [
 		{ "path": "../../packages/types" },
 		{ "path": "../../packages/errors" },
+		{ "path": "../../packages/providers" },
 		{ "path": "../../packages/utils" },
 		{ "path": "../../packages/services" }
 	]

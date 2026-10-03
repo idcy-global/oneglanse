@@ -5,8 +5,6 @@ import type {
 	ProviderExecutionResult,
 } from "@oneglanse/providers";
 import type { PromptPayload, Provider } from "@oneglanse/types";
-import { agentHandler } from "../core/agentHandler.js";
-import { createAgent } from "../core/createAgent.js";
 import { PROVIDER_CONFIGS } from "../core/providers/index.js";
 
 export class BrowserProviderAdapter implements AIProviderAdapter {
@@ -34,6 +32,13 @@ export class BrowserProviderAdapter implements AIProviderAdapter {
 	): Promise<ProviderExecutionResult> {
 		const config = PROVIDER_CONFIGS[this.provider];
 		const startedAt = new Date().toISOString();
+
+		// Keep registry/router imports lightweight. Browser, Redis, proxy and other
+		// worker runtime dependencies are loaded only when this adapter executes.
+		const [{ agentHandler }, { createAgent }] = await Promise.all([
+			import("../core/agentHandler.js"),
+			import("../core/createAgent.js"),
+		]);
 
 		try {
 			const results = await agentHandler(

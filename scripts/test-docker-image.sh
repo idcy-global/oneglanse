@@ -52,7 +52,7 @@ case "$app" in
       -v "$PWD/packages/db/clickhouse-init:/docker-entrypoint-initdb.d:ro" \
       clickhouse/clickhouse-server:latest >/dev/null
     ready=false
-    for _ in {1..60}; do
+    for _ in {1..90}; do
       if docker exec "$prefix-db" pg_isready -U postgres -d oneglanse >/dev/null 2>&1 && \
         docker exec "$prefix-clickhouse" clickhouse-client --password "$test_password" --query 'SELECT 1' >/dev/null 2>&1; then
         ready=true
@@ -61,6 +61,31 @@ case "$app" in
       sleep 1
     done
     test "$ready" = true
+
+    # ClickHouse can accept native client connections before its HTTP listener is
+    # ready, especially on arm64. Poll the same HTTP endpoint the web app uses
+    # from inside the test network to avoid a startup race.
+    docker run --rm --network "$prefix" \
+      -e "CLICKHOUSE_PASSWORD=$test_password" \
+      "$image" node -e '
+        const auth = "Basic " + Buffer.from("default:" + process.env.CLICKHOUSE_PASSWORD).toString("base64");
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        (async () => {
+          for (let attempt = 0; attempt < 90; attempt++) {
+            try {
+              const response = await fetch("http://clickhouse:8123/ping", {
+                headers: { Authorization: auth },
+                signal: AbortSignal.timeout(2000),
+              });
+              if (response.ok) process.exit(0);
+            } catch {}
+            await wait(1000);
+          }
+          console.error("ClickHouse HTTP endpoint did not become ready");
+          process.exit(1);
+        })();
+      '
+
     docker run --rm --network "$prefix" -e "DATABASE_URL=postgresql://postgres:$test_password@db:5432/oneglanse" \
       -w /workspace "$image" pnpm --filter @oneglanse/db db:migrate
     containers+=("$prefix-web")

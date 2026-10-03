@@ -16,6 +16,7 @@ export const env = createEnv({
 	},
 	client: {
 		NEXT_PUBLIC_ONEGLANSE_APP_MODE: z.enum(["self-host", "local"]).optional(),
+		NEXT_PUBLIC_PRODUCT_NAME: z.string().trim().min(1).optional(),
 	},
 	runtimeEnv: {
 		APP_URL: process.env.APP_URL,
@@ -24,6 +25,7 @@ export const env = createEnv({
 		NEXT_PUBLIC_ONEGLANSE_APP_MODE:
 			process.env.NEXT_PUBLIC_ONEGLANSE_APP_MODE ??
 			process.env.ONEGLANSE_APP_MODE,
+		NEXT_PUBLIC_PRODUCT_NAME: process.env.NEXT_PUBLIC_PRODUCT_NAME,
 		INTERNAL_CRON_SECRET: process.env.INTERNAL_CRON_SECRET,
 		BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
 		GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,

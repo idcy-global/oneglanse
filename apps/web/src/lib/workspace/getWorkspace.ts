@@ -1,9 +1,8 @@
 import "server-only";
 
 import { auth } from "@lib/auth/auth";
-import { db } from "@oneglanse/db";
 import type { Workspace } from "@oneglanse/db";
-import { inArray } from "drizzle-orm";
+import { getWorkspacesForUser } from "@oneglanse/services";
 import { headers } from "next/headers";
 
 export async function getWorkspace(): Promise<Workspace | null> {
@@ -16,42 +15,20 @@ export async function getWorkspace(): Promise<Workspace | null> {
 	const sessionWithOrg = session.session as typeof session.session & {
 		activeOrganizationId?: string | null;
 	};
+	const organizationId = sessionWithOrg.activeOrganizationId ?? null;
 
-	const orgId = sessionWithOrg.activeOrganizationId ?? null;
+	if (!organizationId) return null;
 
-	if (orgId) {
-		const workspace = await db.query.workspaces.findFirst({
-			where: (table, { and, eq, isNull }) =>
-				and(eq(table.tenantId, orgId), isNull(table.deletedAt)),
-			orderBy: (table, { desc }) => [desc(table.createdAt)],
-		});
-
-		if (workspace) return workspace;
-	}
-
-	const memberships = await db.query.workspaceMembers.findMany({
-		where: (wm, { and, eq, isNull }) =>
-			and(eq(wm.userId, session.user.id), isNull(wm.deletedAt)),
-		columns: {
-			workspaceId: true,
-		},
+	const workspaces = await getWorkspacesForUser({
+		tenantId: organizationId,
+		userId: session.user.id,
 	});
 
-	const workspaceIds = Array.from(
-		new Set(
-			memberships
-				.map((membership) => membership.workspaceId)
-				.filter((workspaceId): workspaceId is string => Boolean(workspaceId)),
-		),
+	if (workspaces.length === 0) return null;
+
+	return (
+		[...workspaces].sort(
+			(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+		)[0] ?? null
 	);
-
-	if (workspaceIds.length === 0) return null;
-
-	const workspace = await db.query.workspaces.findFirst({
-		where: (table, { and, isNull }) =>
-			and(inArray(table.id, workspaceIds), isNull(table.deletedAt)),
-		orderBy: (table, { desc }) => [desc(table.createdAt)],
-	});
-
-	return workspace ?? null;
 }

@@ -1,5 +1,4 @@
 import { env } from "@/env";
-import { trackUserSignup } from "@/lib/telemetry";
 import { db, schema } from "@oneglanse/db";
 import * as authSchema from "@oneglanse/db";
 import { betterAuth } from "better-auth";
@@ -40,18 +39,12 @@ const socialProviders =
 export const auth = betterAuth({
 	...(authBaseUrl ? { baseURL: authBaseUrl } : {}),
 	secret: authSecret,
+	telemetry: { enabled: false },
 	socialProviders,
 	emailAndPassword: {
 		enabled: true,
 	},
 	databaseHooks: {
-		user: {
-			create: {
-				after: async (user) => {
-					await trackUserSignup(user.id);
-				},
-			},
-		},
 		session: {
 			create: {
 				before: async (session) => {

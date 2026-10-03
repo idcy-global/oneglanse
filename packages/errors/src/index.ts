@@ -2,6 +2,7 @@ export * from "./error/BaseError.js";
 export * from "./error/ValidationError.js";
 export * from "./error/NotFoundError.js";
 export * from "./error/AuthError.js";
+export * from "./error/PermissionError.js";
 export * from "./error/EnvError.js";
 export * from "./error/ExternalServiceError.js";
 export * from "./error/DatabaseError.js";

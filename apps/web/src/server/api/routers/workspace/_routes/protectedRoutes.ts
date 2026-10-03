@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/auth";
-import { ValidationError } from "@oneglanse/errors";
+import { PermissionError, ValidationError } from "@oneglanse/errors";
 import {
 	addWorkspaceToExistingOrg,
 	checkIsFirstWorkspace,
@@ -11,7 +11,10 @@ import {
 	joinWorkspaceByCode,
 } from "@oneglanse/services";
 import { createRateLimiter } from "../../../middleware/rateLimit";
-import { protectedProcedure } from "../../../procedures";
+import {
+	authorizedOrganizationProcedure,
+	protectedProcedure,
+} from "../../../procedures";
 import {
 	createInOrgInputSchema,
 	createWorkspaceInputSchema,
@@ -66,14 +69,25 @@ export const protectedWorkspaceRoutes = {
 				userId,
 			});
 
+			// The commercial tenant guard requires an explicit active Organization.
+			// Keep upstream organization creation behavior, then activate only after
+			// the Workspace has been created successfully.
+			await auth.api.setActiveOrganization({
+				body: { organizationId: org.id },
+				headers,
+			});
+
 			return { workspace, org, isFirstWorkspace };
 		}),
 
-	listByOrg: protectedProcedure
+	listByOrg: authorizedOrganizationProcedure
 		.input(listByOrgInputSchema)
 		.query(async ({ input, ctx }) => {
+			if (input.tenantId !== ctx.organizationId) {
+				throw new PermissionError("Organization access denied.");
+			}
 			return getWorkspacesForUser({
-				tenantId: input.tenantId,
+				tenantId: ctx.organizationId,
 				userId: ctx.user.id,
 			});
 		}),
@@ -82,11 +96,15 @@ export const protectedWorkspaceRoutes = {
 		return getAllWorkspacesForUser({ userId: ctx.user.id });
 	}),
 
-	createInOrg: protectedProcedure
+	createInOrg: authorizedOrganizationProcedure
 		.input(createInOrgInputSchema)
 		.mutation(async ({ input, ctx }) => {
 			const { name, slug, domain, tenantId } = input;
 			const userId = ctx.user.id;
+
+			if (tenantId !== ctx.organizationId) {
+				throw new PermissionError("Organization access denied.");
+			}
 
 			if (!name || !domain || !slug) {
 				throw new ValidationError("Please fill all the mandatory fields.");

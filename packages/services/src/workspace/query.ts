@@ -10,6 +10,7 @@ import type {
 	WorkspaceMemberWithUser,
 } from "@oneglanse/types";
 import { and, eq, isNull } from "drizzle-orm";
+import { requireOrganizationMembership } from "./authorization.js";
 import type {
 	JoinByCodeOrganization,
 	JoinByCodeWorkspace,
@@ -51,6 +52,11 @@ export async function getWorkspacesForUser(
 	if (!tenantId || tenantId.trim() === "") {
 		throw new ValidationError("Tenant ID is undefined.");
 	}
+
+	await requireOrganizationMembership({
+		organizationId: tenantId,
+		userId,
+	});
 
 	const workspaces = await db
 		.select({
@@ -153,6 +159,13 @@ export async function getAllWorkspacesForUser(
 		.innerJoin(
 			schema.organization,
 			eq(schema.organization.id, schema.workspaces.tenantId),
+		)
+		.innerJoin(
+			schema.member,
+			and(
+				eq(schema.member.organizationId, schema.workspaces.tenantId),
+				eq(schema.member.userId, userId),
+			),
 		)
 		.where(
 			and(

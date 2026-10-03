@@ -5,12 +5,15 @@ import { schema } from "@oneglanse/db";
 import { errorMappingMiddleware } from "./middleware/errorMapping";
 import { isAuthenticated } from "./middleware/isAuthenticated";
 import { isInternal } from "./middleware/isInternal";
+import { validOrganization } from "./middleware/validOrganization";
 import { validWorkspace } from "./middleware/validWorkspace";
 import { t } from "./trpc";
 
 const baseProcedure = t.procedure.use(errorMappingMiddleware);
 export const protectedProcedure = baseProcedure.use(isAuthenticated);
-export const authorizedWorkspaceProcedure = baseProcedure
+export const authorizedOrganizationProcedure =
+	protectedProcedure.use(validOrganization);
+export const authorizedWorkspaceProcedure = protectedProcedure
 	.input(schema.workspaceInput)
 	.use(validWorkspace);
 

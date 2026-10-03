@@ -1,8 +1,8 @@
 import "../../styles/globals.css";
 import { appIcons } from "@/lib/app-metadata";
 import { auth } from "@/lib/auth/auth";
+import { productDescription, productName } from "@/lib/product-brand";
 import { readProviderConnectionsState } from "@/lib/provider-connections/server";
-import { trackUserActive } from "@/lib/telemetry";
 import { getWorkspace } from "@/lib/workspace/getWorkspace";
 import { TRPCReactProvider } from "@/trpc/react";
 import { resolveAppMode } from "@oneglanse/types";
@@ -14,9 +14,8 @@ import { redirect } from "next/navigation";
 import LayoutContent from "./layoutContent";
 
 export const metadata: Metadata = {
-	title: "OneGlanse",
-	description:
-		"Track how your brand appears in ChatGPT, Gemini, Perplexity, Claude, and AI Overview.",
+	title: productName,
+	description: productDescription,
 	icons: appIcons,
 };
 
@@ -47,8 +46,6 @@ export default async function RootLayout({
 	if (!session) {
 		return redirect("/login");
 	}
-
-	await trackUserActive(session.user.id);
 
 	const cookieStore = await cookies();
 	const defaultOpen = cookieStore.get("sidebar_state")?.value === "true";

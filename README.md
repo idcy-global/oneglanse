@@ -1,3 +1,7 @@
+> **Commercial fork note:** this branch is derived from OneGlanse under the MIT License.
+> User-facing branding and SaaS tenancy controls are being adapted for a commercial GEO platform.
+> Upstream attribution is intentionally preserved.
+
 <h1 align="center">OneGlanse</h1>
 
 <p align="center"><strong>Free, open-source AI visibility tracking for marketing teams.</strong></p>
@@ -116,7 +120,7 @@ Both modes use infrastructure you control for app data. Self-hosting is intended
 
 Captured responses, analysis results, and provider sessions are stored in the local or self-hosted app stack. Response analysis sends captured text to the OpenAI, Anthropic, or compatible model endpoint you configure. Provider sign-in and self-hosted session transfer use your own accounts and server. Review your model provider's data handling terms before you send responses to it.
 
-The app also sends `user_signed_up` and `user_active` events to PostHog. Each event contains a SHA-256 hash of the app's internal user ID; PostHog adds a receipt timestamp. The telemetry request does not include prompts, captured responses, scores, names, or email addresses. See [the telemetry implementation](apps/web/src/lib/telemetry.ts) for the exact request.
+Upstream OneGlanse includes product telemetry. This commercial fork disables the upstream application telemetry sender and Better Auth telemetry. Prompts, captured responses, scores, names, and email addresses are not sent to the upstream telemetry project.
 
 ## Documentation and contributing
 

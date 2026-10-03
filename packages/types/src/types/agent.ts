@@ -19,6 +19,35 @@ export const PROVIDER_LIST = [
 
 export type Provider = (typeof PROVIDER_LIST)[number];
 
+export const PROVIDER_CAPTURE_TYPES = [
+	"browser",
+	"api",
+	"scraper",
+	"mock",
+] as const;
+
+export type ProviderCaptureType = (typeof PROVIDER_CAPTURE_TYPES)[number];
+
+export const PROVIDER_AUTH_MODES = [
+	"browser-session",
+	"api-key",
+	"none",
+] as const;
+
+export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODES)[number];
+
+export interface PromptCaptureMetadata {
+	adapterId: string;
+	captureType: ProviderCaptureType;
+	model: string | null;
+	region: string | null;
+	locale: string | null;
+	startedAt: string;
+	completedAt: string;
+	estimatedCostUsd: number | null;
+	jobGroupId: string | null;
+}
+
 export const APP_MODE_LIST = ["self-host", "local"] as const;
 
 export type AppMode = (typeof APP_MODE_LIST)[number];

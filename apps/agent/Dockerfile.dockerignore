@@ -18,6 +18,8 @@
 !packages/db/**
 !packages/errors
 !packages/errors/**
+!packages/providers
+!packages/providers/**
 !packages/services
 !packages/services/**
 !packages/types

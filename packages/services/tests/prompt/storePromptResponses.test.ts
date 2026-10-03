@@ -22,7 +22,7 @@ function resultsWithChatGptResponse(): ModelResult {
 				response: "Example response",
 				sources: [
 					{
-							title: "Example",
+						title: "Example",
 						cited_text: "Example citation",
 						url: "https://example.com/source",
 						domain: "example.com",

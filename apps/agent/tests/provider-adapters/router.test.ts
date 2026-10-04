@@ -48,8 +48,11 @@ class FakeAdapter implements AIProviderAdapter {
 			startedAt: now,
 			completedAt: now,
 			estimatedCostUsd: null,
-			results: payload.prompts.map(() => ({
-				promptId: "",
+			results: payload.prompts.map((item) => ({
+				userId: payload.user_id,
+				workspaceId: payload.workspace_id,
+				promptId: item.id,
+				prompt: item.prompt,
 				response: "",
 				sources: [],
 			})),

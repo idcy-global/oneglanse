@@ -2,7 +2,9 @@ import type {
 	AIProviderAdapter,
 	ProviderCapabilities,
 	ProviderExecutionContext,
+	ProviderExecutionCostEstimate,
 	ProviderExecutionResult,
+	ProviderHealthResult,
 } from "@oneglanse/providers";
 import type { PromptPayload, Provider } from "@oneglanse/types";
 import { PROVIDER_CONFIGS } from "../core/providers/index.js";
@@ -24,6 +26,23 @@ export class BrowserProviderAdapter implements AIProviderAdapter {
 		this.adapterId = `browser:${provider}`;
 		this.displayName = config.displayName || config.label;
 		this.enabled = !config.skip;
+	}
+
+	estimateCost(): ProviderExecutionCostEstimate {
+		return {
+			currency: "USD",
+			amount: null,
+			basis: "infrastructure",
+		};
+	}
+
+	async healthCheck(): Promise<ProviderHealthResult> {
+		return {
+			ok: this.enabled,
+			message: this.enabled
+				? "Browser adapter registered and enabled."
+				: "Browser adapter is disabled by provider configuration.",
+		};
 	}
 
 	async execute(

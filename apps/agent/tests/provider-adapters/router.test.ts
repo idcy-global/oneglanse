@@ -1,10 +1,10 @@
 import {
-	ProviderRegistry,
-	ProviderRouter,
 	type AIProviderAdapter,
 	type ProviderCapabilities,
 	type ProviderCaptureType,
 	type ProviderExecutionResult,
+	ProviderRegistry,
+	ProviderRouter,
 } from "@oneglanse/providers";
 import {
 	PROVIDER_LIST,
@@ -108,7 +108,9 @@ describe("ProviderRouter", () => {
 	it("honors a preferred adapter when it satisfies the request", () => {
 		const registry = new ProviderRegistry();
 		registry.register(new FakeAdapter("browser:first", provider, "browser"));
-		registry.register(new FakeAdapter("browser:preferred", provider, "browser"));
+		registry.register(
+			new FakeAdapter("browser:preferred", provider, "browser"),
+		);
 
 		const adapter = new ProviderRouter(registry).resolve({
 			provider,
@@ -128,8 +130,8 @@ describe("ProviderRouter", () => {
 
 		expect(() => router.resolve({ provider })).toThrow();
 
-		expect(
-			router.resolve({ provider, includeDisabled: true }).adapterId,
-		).toBe("browser:disabled");
+		expect(router.resolve({ provider, includeDisabled: true }).adapterId).toBe(
+			"browser:disabled",
+		);
 	});
 });

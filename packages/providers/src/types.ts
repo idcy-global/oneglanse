@@ -1,25 +1,20 @@
 import type {
 	AskPromptResult,
+	PromptCaptureMetadata,
 	PromptPayload,
 	Provider,
+	ProviderAuthMode,
+	ProviderCaptureType,
 } from "@oneglanse/types";
 
-export const PROVIDER_CAPTURE_TYPES = [
-	"browser",
-	"api",
-	"scraper",
-	"mock",
-] as const;
-
-export type ProviderCaptureType = (typeof PROVIDER_CAPTURE_TYPES)[number];
-
-export const PROVIDER_AUTH_MODES = [
-	"browser-session",
-	"api-key",
-	"none",
-] as const;
-
-export type ProviderAuthMode = (typeof PROVIDER_AUTH_MODES)[number];
+export {
+	PROVIDER_AUTH_MODES,
+	PROVIDER_CAPTURE_TYPES,
+} from "@oneglanse/types";
+export type {
+	ProviderAuthMode,
+	ProviderCaptureType,
+} from "@oneglanse/types";
 
 export interface ProviderCapabilities {
 	citations: boolean;
@@ -48,16 +43,9 @@ export interface ProviderExecutionCostEstimate {
 	basis: "provider-api" | "infrastructure" | "unknown";
 }
 
-export interface ProviderExecutionResult {
-	adapterId: string;
+export interface ProviderExecutionResult
+	extends Omit<PromptCaptureMetadata, "jobGroupId"> {
 	provider: Provider;
-	captureType: ProviderCaptureType;
-	model: string | null;
-	region: string | null;
-	locale: string | null;
-	startedAt: string;
-	completedAt: string;
-	estimatedCostUsd: number | null;
 	results: AskPromptResult[];
 }
 

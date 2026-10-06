@@ -5,6 +5,7 @@ import { readProviderAuthStatuses, saveAuthSession } from "@oneglanse/services";
 import { AUTH_PROVIDER_LIST } from "@oneglanse/types";
 import { logger } from "@oneglanse/utils";
 import { env } from "./env.js";
+import { readProviderAdapterHealth } from "./provider-adapters/index.js";
 
 const AGENT_API_HOST = "0.0.0.0";
 const AGENT_API_PORT = 3333;
@@ -30,7 +31,10 @@ function isAuthorized(authorizationHeader: string | undefined): boolean {
 const server = createServer((req, res) => {
 	if (req.method === "GET" && req.url === "/health") {
 		void (async () => {
-			const authStatuses = await readProviderAuthStatuses();
+			const [authStatuses, providerAdapters] = await Promise.all([
+				readProviderAuthStatuses(),
+				readProviderAdapterHealth(),
+			]);
 			res.setHeader("Content-Type", "application/json");
 			res.statusCode = 200;
 			res.end(
@@ -38,6 +42,7 @@ const server = createServer((req, res) => {
 					status: "ok",
 					timestamp: new Date().toISOString(),
 					authProviders: authStatuses,
+					providerAdapters,
 				}),
 			);
 		})();

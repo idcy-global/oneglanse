@@ -7,7 +7,7 @@ import type {
 import { formatDateToClickHouse } from "@oneglanse/utils";
 import { v4 as uuidv4 } from "uuid";
 
-export type PromptResponseInsertRow = {
+type PromptResponseInsertRow = {
 	id: string;
 	prompt_id: string;
 	prompt: string;

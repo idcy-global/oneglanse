@@ -215,14 +215,17 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-oneglanse}
+      CLICKHOUSE_URL: http://clickhouse:8123
     depends_on:
       db:
+        condition: service_healthy
+      clickhouse:
         condition: service_healthy
     restart: "no"
     working_dir: /workspace
     networks:
       - data
-    command: pnpm --filter @oneglanse/db db:migrate
+    command: ["sh", "-ec", "pnpm --filter @oneglanse/db db:migrate && pnpm --filter @oneglanse/db clickhouse:migrate"]
 
 # ----------------------------
 # Volumes

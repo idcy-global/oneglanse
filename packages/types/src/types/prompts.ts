@@ -1,4 +1,5 @@
 import type { AnalysisModelInput } from "./analysis.js";
+import type { ProviderCaptureType } from "./agent.js";
 import type { SourceLookup } from "./sources.js";
 
 export type UserPrompt = {
@@ -42,4 +43,13 @@ export interface PromptResponse extends PromptAnalysisWithSources {
 	prompt_run_at: string;
 	created_at: string;
 	is_analysed: boolean;
+	adapter_id?: string;
+	capture_type?: ProviderCaptureType;
+	capture_model?: string;
+	capture_region?: string;
+	capture_locale?: string;
+	estimated_cost_usd?: number | null;
+	job_group_id?: string;
+	execution_started_at?: string | null;
+	execution_completed_at?: string | null;
 }

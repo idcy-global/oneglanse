@@ -86,6 +86,21 @@ case "$app" in
         })();
       '
 
+    # Simulate an existing ClickHouse table that predates one capture column,
+    # then verify the idempotent migration restores the full Stage 3B schema.
+    docker exec "$prefix-clickhouse" clickhouse-client --password "$test_password" \
+      --query "ALTER TABLE analytics.prompt_responses DROP COLUMN IF EXISTS capture_locale"
+    docker run --rm --network "$prefix" \
+      -e CLICKHOUSE_URL=http://clickhouse:8123 \
+      -e CLICKHOUSE_USER=default -e "CLICKHOUSE_PASSWORD=$test_password" \
+      -w /workspace "$image" pnpm --filter @oneglanse/db clickhouse:migrate
+    for column in adapter_id capture_type capture_model capture_region capture_locale \
+      estimated_cost_usd job_group_id execution_started_at execution_completed_at; do
+      count="$(docker exec "$prefix-clickhouse" clickhouse-client --password "$test_password" \
+        --query "SELECT count() FROM system.columns WHERE database = 'analytics' AND table = 'prompt_responses' AND name = '$column'")"
+      test "$count" = "1"
+    done
+
     docker run --rm --network "$prefix" -e "DATABASE_URL=postgresql://postgres:$test_password@db:5432/oneglanse" \
       -w /workspace "$image" pnpm --filter @oneglanse/db db:migrate
     containers+=("$prefix-web")

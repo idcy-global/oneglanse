@@ -18,6 +18,15 @@ CREATE TABLE IF NOT EXISTS analytics.prompt_responses (
     workspace_id String,
     model String,
     model_provider LowCardinality(String),
+    adapter_id LowCardinality(String) DEFAULT '',
+    capture_type LowCardinality(String) DEFAULT 'browser',
+    capture_model String DEFAULT '',
+    capture_region LowCardinality(String) DEFAULT '',
+    capture_locale LowCardinality(String) DEFAULT '',
+    estimated_cost_usd Nullable(Float64),
+    job_group_id String DEFAULT '',
+    execution_started_at Nullable(DateTime),
+    execution_completed_at Nullable(DateTime),
     response String,
     sources Array(Tuple(
         title String,
@@ -55,3 +64,15 @@ ORDER BY (
 
 -- Migration: Add prompt column if it doesn't exist (safe to run multiple times)
 ALTER TABLE analytics.prompt_analysis ADD COLUMN IF NOT EXISTS prompt String DEFAULT '';
+
+-- Commercial provider capture metadata migrations.
+-- Safe to run repeatedly against existing ClickHouse databases.
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS adapter_id LowCardinality(String) DEFAULT '';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS capture_type LowCardinality(String) DEFAULT 'browser';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS capture_model String DEFAULT '';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS capture_region LowCardinality(String) DEFAULT '';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS capture_locale LowCardinality(String) DEFAULT '';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS estimated_cost_usd Nullable(Float64);
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS job_group_id String DEFAULT '';
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS execution_started_at Nullable(DateTime);
+ALTER TABLE analytics.prompt_responses ADD COLUMN IF NOT EXISTS execution_completed_at Nullable(DateTime);

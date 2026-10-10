@@ -60,8 +60,7 @@ describe("commercial quota", () => {
 			provider: "chatgpt",
 			promptId: "prompt-1",
 			estimatedCostUsd: 0.01,
-			idempotencyKey:
-				"ai_detection:org-1:job-1:chatgpt:prompt-1",
+			idempotencyKey: "ai_detection:org-1:job-1:chatgpt:prompt-1",
 		});
 	});
 });

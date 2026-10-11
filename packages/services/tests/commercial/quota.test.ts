@@ -37,6 +37,7 @@ describe("commercial quota", () => {
 		});
 	});
 
+	// Commercial metering regression: one prompt-provider pair is one detection.
 	it("counts one prompt times one provider as one AI detection", () => {
 		expect(countAiDetections({ promptCount: 3, providerCount: 4 })).toBe(12);
 	});

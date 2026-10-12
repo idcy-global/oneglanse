@@ -1,0 +1,2 @@
+-- Stage 4B PostgreSQL migration for organization-owned usage.
+-- Pending review and CI validation.

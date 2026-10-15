@@ -1,0 +1,3 @@
+GEO GitHub connector write-access smoke test.
+No production changes.
+Date: 2026-10-15.

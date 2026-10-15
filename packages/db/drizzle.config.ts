@@ -8,7 +8,7 @@ if (isDrizzleCliRun && !databaseUrl) {
 }
 
 export default {
-	schema: ["./src/schema/auth.ts", "./src/schema/workspace.ts"],
+	schema: ["./src/schema/auth.ts", "./src/schema/workspace.ts", "./src/schema/commercial.ts"],
 	out: "./drizzle",
 	dialect: "postgresql",
 	dbCredentials: {

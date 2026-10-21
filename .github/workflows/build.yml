@@ -147,6 +147,10 @@ jobs:
             postgres:
               - 'packages/db/Dockerfile'
               - 'packages/db/init-scripts/**'
+              - 'packages/db/drizzle/**'
+              - 'packages/db/src/schema/**'
+              - 'packages/db/drizzle.config.ts'
+              - 'packages/db/package.json'
               - 'docker-compose.yml'
               - 'scripts/run-compose.mjs'
               - '.github/workflows/build.yml'

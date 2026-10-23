@@ -36,6 +36,26 @@ jobs:
   validate:
     name: Lint, Typecheck, Test, Build
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: oneglanse_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d oneglanse_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: ci
+      PGPASSWORD: ci
+      PGDATABASE: oneglanse_ci
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -51,6 +71,21 @@ jobs:
       - run: pnpm test
       - run: pnpm deadcode
       - run: pnpm build
+      - name: Validate PostgreSQL migrations and tenant constraints
+        run: |
+          psql -v ON_ERROR_STOP=1 -f packages/db/drizzle/0000_famous_smiling_tiger.sql
+          psql -v ON_ERROR_STOP=1 -f packages/db/drizzle/0001_commercial_metering.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'commercial_usage_events_workspace_org_fk') THEN
+              RAISE EXCEPTION 'Missing workspace organization FK';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'workspaces_id_tenant_id_unique') THEN
+              RAISE EXCEPTION 'Missing tenant attribution unique index';
+            END IF;
+          END $;
+          SQL
 
   # ── Detect which apps changed ────────────────────────────────
   changes:
@@ -147,6 +182,10 @@ jobs:
             postgres:
               - 'packages/db/Dockerfile'
               - 'packages/db/init-scripts/**'
+              - 'packages/db/drizzle/**'
+              - 'packages/db/src/schema/**'
+              - 'packages/db/drizzle.config.ts'
+              - 'packages/db/package.json'
               - 'docker-compose.yml'
               - 'scripts/run-compose.mjs'
               - '.github/workflows/build.yml'

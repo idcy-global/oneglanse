@@ -127,7 +127,12 @@ fi
 header "2 / 6 — Cloning OneGlanse"
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Repo exists at $INSTALL_DIR — pulling latest..."
+  EXISTING_ORIGIN="$(git -C "$INSTALL_DIR" remote get-url origin)"
+  case "$EXISTING_ORIGIN" in
+    https://github.com/idcy-global/oneglanse|https://github.com/idcy-global/oneglanse.git|git@github.com:idcy-global/oneglanse.git) ;;
+    *) fatal "Existing checkout origin is not IDCY commercial fork ($EXISTING_ORIGIN). Refusing to update another repository." ;;
+  esac
+  info "IDCY checkout exists at $INSTALL_DIR — pulling latest..."
   git -C "$INSTALL_DIR" pull
 else
   info "Cloning into $INSTALL_DIR..."

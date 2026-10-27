@@ -28,7 +28,7 @@ fi
 
 # ─── Gather inputs ────────────────────────────────────────────────────────────
 
-header "OneGlanse — VPS Setup"
+header "IDCY GEO — VPS Setup"
 echo "This script installs all dependencies, clones the repo, configures nginx + HTTPS,"
 echo "and starts the app-only self-hosted stack."
 echo ""
@@ -131,7 +131,7 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
   git -C "$INSTALL_DIR" pull
 else
   info "Cloning into $INSTALL_DIR..."
-  git clone --depth 1 https://github.com/oneglanse/oneglanse "$INSTALL_DIR"
+  git clone --depth 1 https://github.com/idcy-global/oneglanse.git "$INSTALL_DIR"
 fi
 
 cd "$INSTALL_DIR"
@@ -186,7 +186,7 @@ success ".env configured"
 
 header "4 / 6 — Starting OneGlanse"
 
-info "Starting the app from published Docker images..."
+info "Building the application from the IDCY commercial checkout..."
 if docker_socket_access; then
   node scripts/run-compose.mjs bootstrap
 elif [[ "$DOCKER_GROUP_PENDING" -eq 1 ]]; then

@@ -20,7 +20,7 @@ Datacenter IPs are often challenged by provider interfaces. The current self-hos
 On the VPS, connect as a non-root sudo user. The script rejects root. Set the DNS A record before starting so certificate issuance can succeed.
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/oneglanse/oneglanse/main/scripts/setup-vps.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/idcy-global/oneglanse/main/scripts/setup-vps.sh)
 ```
 
 The interactive script asks for a domain, install directory, analysis key, proxy API URL, and upload token. It installs missing Docker, Node.js, Git, and nginx dependencies, configures `.env`, starts the Docker stack, configures nginx and attempts a Let's Encrypt certificate, and opens firewall ports if `ufw` is installed. It generates an upload token when you leave that prompt blank. It also handles first-run Docker group access for its setup session.
@@ -30,7 +30,7 @@ The script opens port 3333 for session upload and can continue if certificate is
 You can also clone the repository and run the script from that checkout:
 
 ```bash
-git clone https://github.com/oneglanse/oneglanse.git /tmp/oneglanse
+git clone https://github.com/idcy-global/oneglanse.git /tmp/oneglanse
 bash /tmp/oneglanse/scripts/setup-vps.sh
 ```
 
@@ -56,7 +56,7 @@ sudo apt-get install -y nodejs git nginx certbot python3-certbot-nginx
 ### 2. Clone and configure
 
 ```bash
-git clone https://github.com/oneglanse/oneglanse.git "$HOME/oneglanse"
+git clone https://github.com/idcy-global/oneglanse.git "$HOME/oneglanse"
 cd "$HOME/oneglanse"
 cp .env.example .env
 ```
@@ -80,7 +80,7 @@ For Anthropic, set `ANTHROPIC_API_KEY` and `ANALYSIS_LLM_PROVIDER=claude` instea
 node scripts/run-compose.mjs bootstrap
 ```
 
-This uses published application images when available. If Docker reports no compatible image manifest, it falls back to a local build. The Web app listens on `127.0.0.1:3000`; Postgres, ClickHouse, and Redis also bind to loopback. The Agent upload API listens on port `3333`.
+This builds the commercial application images from the checked-out IDCY source. Redis and ClickHouse base images are fetched separately. Allow sufficient build resources on first installation. The Web app listens on `127.0.0.1:3000`; Postgres, ClickHouse, and Redis also bind to loopback. The Agent upload API listens on port `3333`.
 
 Check the containers:
 
@@ -155,7 +155,7 @@ git pull
 node scripts/run-compose.mjs bootstrap
 ```
 
-Bootstrap pulls current configured images and recreates containers. Expect a brief interruption during recreation. If you changed `.env`, this command also applies the new values.
+Bootstrap rebuilds the commercial app images from the checked-out source and recreates containers. Expect a brief interruption during recreation. If you changed `.env`, this command also applies the new values.
 
 ## Session-upload security
 

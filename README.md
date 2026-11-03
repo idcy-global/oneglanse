@@ -76,7 +76,7 @@ You need Node.js 20 or newer, pnpm 10 or newer, and Docker. You also need an ana
 OneGlanse has no subscription or usage fee. Model API usage, provider plans, VPS hosting, and proxy service can cost extra.
 
 ```bash
-git clone https://github.com/oneglanse/oneglanse.git
+git clone https://github.com/idcy-global/oneglanse.git
 cd oneglanse
 cp .env.example .env
 ```

@@ -8,14 +8,10 @@ import {
 const COMMANDS_REQUIRING_EDGE_NETWORK = new Set(["create", "start", "up"]);
 const COMPOSE_FILE = "docker-compose.yml";
 const DEFAULT_IMAGES = {
-	ONEGLANSE_AGENT_IMAGE: "ghcr.io/oneglanse/oneglanse-agent:latest",
-	ONEGLANSE_POSTGRES_IMAGE: "ghcr.io/oneglanse/oneglanse-postgres:latest",
-	ONEGLANSE_WEB_IMAGE: "ghcr.io/oneglanse/oneglanse-web:latest",
+	ONEGLANSE_AGENT_IMAGE: "idcy-geo-agent:local",
+	ONEGLANSE_POSTGRES_IMAGE: "idcy-geo-postgres:local",
+	ONEGLANSE_WEB_IMAGE: "idcy-geo-web:local",
 };
-const ARCH_MISMATCH_PATTERNS = [
-	"no matching manifest",
-	"no match for platform in manifest",
-];
 const PULLABLE_SERVICES = [
 	{ service: "redis" },
 	{ service: "clickhouse" },
@@ -65,13 +61,6 @@ async function runCompose(composeArgs) {
 	await runComposeCommand([...composeArgs]);
 }
 
-function isArchitectureMismatchError(error) {
-	const message = error instanceof Error ? error.message : String(error);
-	return ARCH_MISMATCH_PATTERNS.some((pattern) =>
-		message.toLowerCase().includes(pattern),
-	);
-}
-
 async function runComposeCommand(composeArgs) {
 	const { stdout, stderr } = await runCommandCapture("docker", [
 		"compose",
@@ -104,25 +93,11 @@ async function runSmartPull() {
 
 async function runBootstrap() {
 	await ensureDockerNetwork(edgeNetworkName);
-
-	try {
-		await runSmartPull();
-		await runCompose(["up", "-d", "--force-recreate"]);
-		console.log("Self-host stack started from published images.");
-	} catch (error) {
-		if (!isArchitectureMismatchError(error)) {
-			throw error;
-		}
-
-		console.warn(
-			[
-				"Published self-host images are not available for this architecture yet.",
-				"Falling back to a local Docker build for this machine.",
-			].join(" "),
-		);
-		await runCompose(["up", "-d", "--build", "--force-recreate"]);
-		console.log("Self-host stack started from a local cross-platform build.");
-	}
+	await runSmartPull();
+	// Always build application images from this checkout for the commercial MVP.
+	// An upstream GHCR release must never be silently deployed instead of this fork.
+	await runCompose(["up", "-d", "--build", "--force-recreate"]);
+	console.log("Self-host stack started from this checkout's Docker build.");
 }
 
 async function main() {

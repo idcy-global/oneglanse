@@ -25,7 +25,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/idcy-global/oneglanse/main/s
 
 The interactive script asks for a domain, install directory, analysis key, proxy API URL, and upload token. It installs missing Docker, Node.js, Git, and nginx dependencies, configures `.env`, starts the Docker stack, configures nginx and attempts a Let's Encrypt certificate, and opens firewall ports if `ufw` is installed. It generates an upload token when you leave that prompt blank. It also handles first-run Docker group access for its setup session.
 
-The script opens port 3333 for session upload and can continue if certificate issuance fails. Review the [session-upload security options](#session-upload-security) and confirm HTTPS works before using the public app. Run it with `bash <(...)` so its prompts can read your terminal.
+The script keeps the session upload endpoint on host loopback and does not open TCP 3333 in the firewall. It can continue if certificate issuance fails; confirm HTTPS works before using the public app. Run it with `bash <(...)` so its prompts can read your terminal.
 
 You can also clone the repository and run the script from that checkout:
 
@@ -80,7 +80,7 @@ For Anthropic, set `ANTHROPIC_API_KEY` and `ANALYSIS_LLM_PROVIDER=claude` instea
 node scripts/run-compose.mjs bootstrap
 ```
 
-This builds the commercial application images from the checked-out IDCY source. Redis and ClickHouse base images are fetched separately. Allow sufficient build resources on first installation. The Web app listens on `127.0.0.1:3000`; Postgres, ClickHouse, and Redis also bind to loopback. The Agent upload API listens on port `3333`.
+This builds the commercial application images from the checked-out IDCY source. Redis and ClickHouse base images are fetched separately. Allow sufficient build resources on first installation. The Web app listens on `127.0.0.1:3000`; Postgres, ClickHouse, and Redis also bind to loopback. The Agent upload API binds to host `127.0.0.1:3333` and is not publicly exposed.
 
 Check the containers:
 
@@ -122,12 +122,20 @@ Verify `https://app.example.com` loads before creating an account.
 
 ## Capture and upload provider sessions
 
-On your desktop machine, clone the repository and install dependencies if you have not already. Configure an upload target in that checkout's `.env`, using the same token as the VPS. The default IP shortcut constructs a plain HTTP URL on port 3333:
+On your desktop machine, clone the IDCY repository and install dependencies if you have not already. Provider sessions are credentials: first create a private SSH tunnel from your desktop to the VPS (replace the SSH user and address):
+
+```bash
+ssh -N -L 3333:127.0.0.1:3333 VPS_USER@VPS_HOST
+```
+
+In the desktop checkout's `.env`, use the tunnel and the upload token from the VPS. Keep the SSH tunnel open while uploading:
 
 ```dotenv
-ONEGLANSE_VPS_IP=YOUR_VPS_IP
+AGENT_AUTH_UPLOAD_URL=http://127.0.0.1:3333/auth/sessions
 AGENT_AUTH_UPLOAD_TOKEN=your-long-random-secret
 ```
+
+The HTTP transfer travels through the encrypted SSH connection, not public cleartext. Do not use the `ONEGLANSE_VPS_IP` direct HTTP shortcut across the public internet.
 
 Run `pnpm auth` to prepare the Camoufox browser runtime, build the required workspace packages, and open the local provider sign-in UI on port 3100. The full local app stack and its database services are not required.
 
@@ -141,7 +149,7 @@ Finish sign-in in the browser, return to the terminal, and press Enter. If sessi
 pnpm upload:vps
 ```
 
-For an HTTPS upload endpoint, set `AGENT_AUTH_UPLOAD_URL` to its full `/auth/sessions` URL instead of using `ONEGLANSE_VPS_IP`. You must provide TLS termination or a secure tunnel for that endpoint. The Agent does not provide HTTPS itself.
+A separately secured HTTPS reverse-proxy endpoint is also possible; the Agent does not provide HTTPS by itself. Do not publicly expose port 3333.
 
 Open the Providers page on the VPS app to check connection status. Then add prompts and run them. Configure recurring runs on the Schedule page.
 
@@ -159,15 +167,15 @@ Bootstrap rebuilds the commercial app images from the checked-out source and rec
 
 ## Session-upload security
 
-The Agent exposes `POST /auth/sessions` on port 3333 and requires `AGENT_AUTH_UPLOAD_TOKEN`. The IP shortcut sends the token and provider sessions over plain HTTP. Use a private network, VPN, or an HTTPS reverse proxy for uploads. Restrict port 3333 to your source IP when possible. The automated script opens that port broadly, so narrow the firewall rule after setup if you use a public VPS.
+The Agent exposes `POST /auth/sessions` on host loopback port 3333 and requires `AGENT_AUTH_UPLOAD_TOKEN`. Use the SSH tunnel above or a separately secured HTTPS endpoint. Never send provider sessions or upload tokens directly over public HTTP.
 
-For example, with `ufw` and a stable desktop public IP:
+For an older VPS installation, remove any public 3333 firewall allowance **after confirming SSH access**:
 
 ```bash
 sudo ufw delete allow 3333/tcp
-sudo ufw allow from YOUR_DESKTOP_PUBLIC_IP to any port 3333 proto tcp
 ```
 
+Check that `docker ps` shows `127.0.0.1:3333` rather than `0.0.0.0:3333` or `[::]:3333`. Do not proxy the upload endpoint through the normal unauthenticated public Web proxy.
 Do not expose the database ports. In the Compose file, they bind to loopback. See the repository [security policy](https://github.com/oneglanse/oneglanse/blob/main/SECURITY.md) for the full data-flow boundary.
 
 For deployment problems, see [Troubleshooting](/troubleshooting).

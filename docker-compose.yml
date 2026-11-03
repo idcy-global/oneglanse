@@ -27,7 +27,7 @@ services:
     volumes:
       - ${ONEGLANSE_STORAGE_ROOT:-/opt/oneglanse/storage}:/storage
     ports:
-      - "3333:3333"
+      - "127.0.0.1:3333:3333"
     depends_on:
       redis:
         condition: service_healthy

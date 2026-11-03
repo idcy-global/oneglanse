@@ -260,9 +260,8 @@ header "6 / 6 — Configuring firewall"
 if require_cmd ufw; then
   sudo ufw allow OpenSSH
   sudo ufw allow 'Nginx Full'
-  sudo ufw allow 3333/tcp
   sudo ufw --force enable
-  success "ufw configured (SSH + HTTP/HTTPS + auth upload allowed)"
+  success "ufw configured (SSH + HTTP/HTTPS only; auth upload stays on loopback)"
 else
   warn "ufw not found — configure your firewall manually"
 fi
@@ -277,11 +276,11 @@ echo "  Install dir:    ${INSTALL_DIR}"
 echo ""
 echo "Next steps:"
 echo "  1. On your local machine, set in .env:"
-echo "       ONEGLANSE_VPS_IP=<your VPS IP>"
+echo "       AGENT_AUTH_UPLOAD_URL=http://127.0.0.1:3333/auth/sessions"
 echo "       AGENT_AUTH_UPLOAD_TOKEN=${AUTH_TOKEN}"
-echo "  2. Run: pnpm auth  (sign in to providers locally)"
-echo "  3. Run: pnpm upload:vps  (transfer sessions to this VPS)"
-echo "  4. Open https://${DOMAIN}, create your account, and add prompts."
+echo "  2. Create an SSH tunnel: ssh -N -L 3333:127.0.0.1:3333 <user>@<server-ip>\n  3. Run: pnpm auth  (sign in to providers locally)"
+echo "  4. Run: pnpm upload:vps  (transfer sessions through the SSH tunnel)"
+echo "  5. Open https://${DOMAIN}, create your account, and add prompts."
 echo ""
 echo "To update in the future:"
 echo "  cd ${INSTALL_DIR} && git pull && node scripts/run-compose.mjs bootstrap"

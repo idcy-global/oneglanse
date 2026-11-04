@@ -144,6 +144,18 @@ cd "$INSTALL_DIR"
 # Load the checked-out helper for atomic, permission-restricted .env updates.
 source "$INSTALL_DIR/scripts/lib/env-file.sh"
 
+# Compose names its persistent PostgreSQL volume from the fixed project name.
+# Never rotate credentials underneath an existing data volume during an update.
+ENV_FILE_WAS_PRESENT=0
+[[ -f .env ]] && ENV_FILE_WAS_PRESENT=1
+HAS_EXISTING_DB_VOLUME=0
+if docker volume inspect oneglanse-app_db_data >/dev/null 2>&1; then
+  HAS_EXISTING_DB_VOLUME=1
+fi
+if [[ "$HAS_EXISTING_DB_VOLUME" -eq 1 && "$ENV_FILE_WAS_PRESENT" -eq 0 ]]; then
+  fatal "Existing GEO database volume found but .env is missing. Restore the original .env backup before continuing; refusing to start with example credentials."
+fi
+
 # ─── Configure .env ───────────────────────────────────────────────────────────
 
 header "3 / 6 — Configuring .env"
@@ -168,14 +180,23 @@ else
 fi
 
 set_env "THORDATA_PROXY_API_URL" "$PROXY_URL"
-ensure_secret "POSTGRES_PASSWORD"
-ensure_secret "REDIS_PASSWORD"
-ensure_secret "CLICKHOUSE_PASSWORD"
-ensure_secret "BETTER_AUTH_SECRET"
-ensure_secret "INTERNAL_CRON_SECRET"
+if [[ "$HAS_EXISTING_DB_VOLUME" -eq 1 ]]; then
+  info "Existing GEO data volume detected; preserving all persistent-service and application secrets."
+  for key in POSTGRES_PASSWORD REDIS_PASSWORD CLICKHOUSE_PASSWORD BETTER_AUTH_SECRET INTERNAL_CRON_SECRET; do
+    if needs_secret "$key"; then
+      warn "$key still has an example default. It was preserved to avoid disconnecting existing data; rotate it with a coordinated database procedure before production use."
+    fi
+  done
+else
+  ensure_secret "POSTGRES_PASSWORD"
+  ensure_secret "REDIS_PASSWORD"
+  ensure_secret "CLICKHOUSE_PASSWORD"
+  ensure_secret "BETTER_AUTH_SECRET"
+  ensure_secret "INTERNAL_CRON_SECRET"
+fi
 
 chmod 600 .env
-success ".env configured (private file permissions and strong database secrets)"
+success ".env configured (private file permissions; fresh installs receive strong secrets)"
 
 # ─── Start the stack ──────────────────────────────────────────────────────────
 

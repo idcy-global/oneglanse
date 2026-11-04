@@ -142,7 +142,7 @@ fi
 cd "$INSTALL_DIR"
 
 # Load the checked-out helper for atomic, permission-restricted .env updates.
-source "$INSTALL_DIR/scripts/lib/env-file.sh"
+source "$PWD/scripts/lib/env-file.sh"
 
 # Compose names its persistent PostgreSQL volume from the fixed project name.
 # Never rotate credentials underneath an existing data volume during an update.

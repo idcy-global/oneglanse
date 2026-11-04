@@ -47,4 +47,9 @@ if set_env BAD_KEY $'not\nallowed'; then
   exit 1
 fi
 
+export ONEGLANSE_ENV_FILE="$TMP_DIR/new.env"
+set_env CREATED_FROM_EMPTY_FILE "created-safely"
+grep -Fxq "CREATED_FROM_EMPTY_FILE=created-safely" "$ONEGLANSE_ENV_FILE"
+[[ "$(stat -c %a "$ONEGLANSE_ENV_FILE")" == "600" ]]
+
 echo "VPS_ENV_FILE_TEST=PASS"

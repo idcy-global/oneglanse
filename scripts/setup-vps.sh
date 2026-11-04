@@ -148,8 +148,15 @@ source "$INSTALL_DIR/scripts/lib/env-file.sh"
 # Never rotate credentials underneath an existing data volume during an update.
 ENV_FILE_WAS_PRESENT=0
 [[ -f .env ]] && ENV_FILE_WAS_PRESENT=1
+if docker_socket_access; then
+  DOCKER_CMD=(docker)
+elif sudo docker info >/dev/null 2>&1; then
+  DOCKER_CMD=(sudo docker)
+else
+  fatal "Cannot inspect Docker volumes safely. Start Docker and ensure sudo access, then rerun the installer."
+fi
 HAS_EXISTING_DB_VOLUME=0
-if docker volume inspect oneglanse-app_db_data >/dev/null 2>&1; then
+if "${DOCKER_CMD[@]}" volume inspect oneglanse-app_db_data >/dev/null 2>&1; then
   HAS_EXISTING_DB_VOLUME=1
 fi
 if [[ "$HAS_EXISTING_DB_VOLUME" -eq 1 && "$ENV_FILE_WAS_PRESENT" -eq 0 ]]; then

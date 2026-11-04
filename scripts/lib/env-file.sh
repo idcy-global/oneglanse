@@ -21,7 +21,9 @@ set_env() {
     return 1
   }
 
-  [[ -f "$file" ]] || : > "$file"
+  if [[ ! -f "$file" ]]; then
+    (umask 077; : > "$file") || return 1
+  fi
   local tmp
   tmp="$(mktemp "${file}.tmp.XXXXXX")"
   if ! KEY="$key" VALUE="$value" awk '

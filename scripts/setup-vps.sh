@@ -141,6 +141,9 @@ fi
 
 cd "$INSTALL_DIR"
 
+# Load the checked-out helper for atomic, permission-restricted .env updates.
+source "$INSTALL_DIR/scripts/lib/env-file.sh"
+
 # ─── Configure .env ───────────────────────────────────────────────────────────
 
 header "3 / 6 — Configuring .env"
@@ -150,20 +153,7 @@ if [[ ! -f .env ]]; then
   info "Created .env from .env.example"
 fi
 
-set_env() {
-  local key="$1" val="$2"
-  if grep -q "^${key}=" .env; then
-    sed -i "s|^${key}=.*|${key}=${val}|" .env
-  else
-    echo "${key}=${val}" >> .env
-  fi
-}
-
-needs_secret() {
-  local key="$1" current=""
-  current="$(grep "^${key}=" .env | head -n1 | cut -d= -f2- || true)"
-  [[ -z "$current" || "$current" == "replace-me" || "$current" == "changeme" ]]
-}
+chmod 600 .env
 
 set_env "APP_URL"      "https://${DOMAIN}"
 set_env "API_BASE_URL" "https://${DOMAIN}"
@@ -178,14 +168,14 @@ else
 fi
 
 set_env "THORDATA_PROXY_API_URL" "$PROXY_URL"
-if needs_secret "BETTER_AUTH_SECRET"; then
-  set_env "BETTER_AUTH_SECRET" "$(openssl rand -hex 32)"
-fi
-if needs_secret "INTERNAL_CRON_SECRET"; then
-  set_env "INTERNAL_CRON_SECRET" "$(node -e "console.log(require('node:crypto').randomUUID())")"
-fi
+ensure_secret "POSTGRES_PASSWORD"
+ensure_secret "REDIS_PASSWORD"
+ensure_secret "CLICKHOUSE_PASSWORD"
+ensure_secret "BETTER_AUTH_SECRET"
+ensure_secret "INTERNAL_CRON_SECRET"
 
-success ".env configured"
+chmod 600 .env
+success ".env configured (private file permissions and strong database secrets)"
 
 # ─── Start the stack ──────────────────────────────────────────────────────────
 

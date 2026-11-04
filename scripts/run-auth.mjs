@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
 import zlib from "node:zlib";
+import { validateAuthUploadUrl } from "./lib/secure-auth-upload-url.mjs";
 import {
 	attachTerminationHandler,
 	buildLocalRuntimeEnv,
@@ -235,6 +236,9 @@ async function main() {
 		throw new Error(
 			"--upload-url and --upload-token must be provided together.",
 		);
+	}
+	if (uploadUrl) {
+		validateAuthUploadUrl(uploadUrl);
 	}
 
 	// Upload-only: just read session files and POST — no Camoufox, no package builds

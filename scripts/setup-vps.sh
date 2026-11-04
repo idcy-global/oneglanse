@@ -141,29 +141,41 @@ fi
 
 cd "$INSTALL_DIR"
 
+# Load the checked-out helper for atomic, permission-restricted .env updates.
+source "$PWD/scripts/lib/env-file.sh"
+
+# Compose uses a fixed project name. Never rotate credentials underneath
+# existing PostgreSQL, ClickHouse, or Redis data during an installer update.
+ENV_FILE_WAS_PRESENT=0
+[[ -f .env ]] && ENV_FILE_WAS_PRESENT=1
+if docker_socket_access; then
+  DOCKER_CMD=(docker)
+elif sudo docker info >/dev/null 2>&1; then
+  DOCKER_CMD=(sudo docker)
+else
+  fatal "Cannot inspect Docker volumes safely. Start Docker and ensure sudo access, then rerun the installer."
+fi
+HAS_EXISTING_DATA_VOLUME=0
+for volume in oneglanse-app_db_data oneglanse-app_clickhouse_data oneglanse-app_redis_data; do
+  if "${DOCKER_CMD[@]}" volume inspect "$volume" >/dev/null 2>&1; then
+    HAS_EXISTING_DATA_VOLUME=1
+    break
+  fi
+done
+if [[ "$HAS_EXISTING_DATA_VOLUME" -eq 1 && "$ENV_FILE_WAS_PRESENT" -eq 0 ]]; then
+  fatal "Existing GEO data volume found but .env is missing. Restore the original .env backup before continuing; refusing to start with example credentials."
+fi
+
 # ─── Configure .env ───────────────────────────────────────────────────────────
 
 header "3 / 6 — Configuring .env"
 
 if [[ ! -f .env ]]; then
-  cp .env.example .env
+  (umask 077; cp .env.example .env)
   info "Created .env from .env.example"
 fi
 
-set_env() {
-  local key="$1" val="$2"
-  if grep -q "^${key}=" .env; then
-    sed -i "s|^${key}=.*|${key}=${val}|" .env
-  else
-    echo "${key}=${val}" >> .env
-  fi
-}
-
-needs_secret() {
-  local key="$1" current=""
-  current="$(grep "^${key}=" .env | head -n1 | cut -d= -f2- || true)"
-  [[ -z "$current" || "$current" == "replace-me" || "$current" == "changeme" ]]
-}
+chmod 600 .env
 
 set_env "APP_URL"      "https://${DOMAIN}"
 set_env "API_BASE_URL" "https://${DOMAIN}"
@@ -178,14 +190,23 @@ else
 fi
 
 set_env "THORDATA_PROXY_API_URL" "$PROXY_URL"
-if needs_secret "BETTER_AUTH_SECRET"; then
-  set_env "BETTER_AUTH_SECRET" "$(openssl rand -hex 32)"
-fi
-if needs_secret "INTERNAL_CRON_SECRET"; then
-  set_env "INTERNAL_CRON_SECRET" "$(node -e "console.log(require('node:crypto').randomUUID())")"
+if [[ "$HAS_EXISTING_DATA_VOLUME" -eq 1 ]]; then
+  info "Existing GEO data volume detected; preserving all persistent-service and application secrets."
+  for key in POSTGRES_PASSWORD REDIS_PASSWORD CLICKHOUSE_PASSWORD BETTER_AUTH_SECRET INTERNAL_CRON_SECRET; do
+    if needs_secret "$key"; then
+      warn "$key still has an example default. It was preserved to avoid disconnecting existing data; rotate it with a coordinated database procedure before production use."
+    fi
+  done
+else
+  ensure_secret "POSTGRES_PASSWORD"
+  ensure_secret "REDIS_PASSWORD"
+  ensure_secret "CLICKHOUSE_PASSWORD"
+  ensure_secret "BETTER_AUTH_SECRET"
+  ensure_secret "INTERNAL_CRON_SECRET"
 fi
 
-success ".env configured"
+chmod 600 .env
+success ".env configured (private file permissions; fresh installs receive strong secrets)"
 
 # ─── Start the stack ──────────────────────────────────────────────────────────
 

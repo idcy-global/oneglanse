@@ -171,7 +171,7 @@ fi
 header "3 / 6 — Configuring .env"
 
 if [[ ! -f .env ]]; then
-  cp .env.example .env
+  (umask 077; cp .env.example .env)
   info "Created .env from .env.example"
 fi
 

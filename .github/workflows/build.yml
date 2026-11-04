@@ -51,6 +51,10 @@ jobs:
       - run: pnpm test
       - name: Verify provider auth upload transport security
         run: node --test scripts/tests/secure-auth-upload-url.test.mjs
+      - name: Verify VPS environment secret handling
+        run: |
+          bash -n scripts/setup-vps.sh scripts/lib/env-file.sh scripts/tests/test-env-file.sh
+          bash scripts/tests/test-env-file.sh
       - run: pnpm deadcode
       - run: pnpm build
 

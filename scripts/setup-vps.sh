@@ -144,8 +144,8 @@ cd "$INSTALL_DIR"
 # Load the checked-out helper for atomic, permission-restricted .env updates.
 source "$PWD/scripts/lib/env-file.sh"
 
-# Compose names its persistent PostgreSQL volume from the fixed project name.
-# Never rotate credentials underneath an existing data volume during an update.
+# Compose uses a fixed project name. Never rotate credentials underneath
+# existing PostgreSQL, ClickHouse, or Redis data during an installer update.
 ENV_FILE_WAS_PRESENT=0
 [[ -f .env ]] && ENV_FILE_WAS_PRESENT=1
 if docker_socket_access; then
@@ -155,12 +155,15 @@ elif sudo docker info >/dev/null 2>&1; then
 else
   fatal "Cannot inspect Docker volumes safely. Start Docker and ensure sudo access, then rerun the installer."
 fi
-HAS_EXISTING_DB_VOLUME=0
-if "${DOCKER_CMD[@]}" volume inspect oneglanse-app_db_data >/dev/null 2>&1; then
-  HAS_EXISTING_DB_VOLUME=1
-fi
-if [[ "$HAS_EXISTING_DB_VOLUME" -eq 1 && "$ENV_FILE_WAS_PRESENT" -eq 0 ]]; then
-  fatal "Existing GEO database volume found but .env is missing. Restore the original .env backup before continuing; refusing to start with example credentials."
+HAS_EXISTING_DATA_VOLUME=0
+for volume in oneglanse-app_db_data oneglanse-app_clickhouse_data oneglanse-app_redis_data; do
+  if "${DOCKER_CMD[@]}" volume inspect "$volume" >/dev/null 2>&1; then
+    HAS_EXISTING_DATA_VOLUME=1
+    break
+  fi
+done
+if [[ "$HAS_EXISTING_DATA_VOLUME" -eq 1 && "$ENV_FILE_WAS_PRESENT" -eq 0 ]]; then
+  fatal "Existing GEO data volume found but .env is missing. Restore the original .env backup before continuing; refusing to start with example credentials."
 fi
 
 # ─── Configure .env ───────────────────────────────────────────────────────────
@@ -187,7 +190,7 @@ else
 fi
 
 set_env "THORDATA_PROXY_API_URL" "$PROXY_URL"
-if [[ "$HAS_EXISTING_DB_VOLUME" -eq 1 ]]; then
+if [[ "$HAS_EXISTING_DATA_VOLUME" -eq 1 ]]; then
   info "Existing GEO data volume detected; preserving all persistent-service and application secrets."
   for key in POSTGRES_PASSWORD REDIS_PASSWORD CLICKHOUSE_PASSWORD BETTER_AUTH_SECRET INTERNAL_CRON_SECRET; do
     if needs_secret "$key"; then

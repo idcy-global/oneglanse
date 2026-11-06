@@ -28,7 +28,10 @@ export const workspaces = pgTable("workspaces", {
 	selectedPromptIds: text("selected_prompt_ids").array(),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	deletedAt: timestamp("deleted_at"),
-});
+}, (table) => [
+	// Required by usage-event composite FK for tenant-safe attribution.
+	uniqueIndex("workspaces_id_tenant_id_unique").on(table.id, table.tenantId),
+]);
 
 export const workspaceMembers = pgTable(
 	"workspace_members",

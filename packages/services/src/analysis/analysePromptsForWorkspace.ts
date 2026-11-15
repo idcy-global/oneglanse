@@ -11,27 +11,21 @@ import { getNextAnalysisCursor } from "./analysisCursor.js";
 import { runAnalysis } from "./runAnalysis.js";
 
 async function analysePromptResponse(args: {
-	workspaceId: string;
+	brandName: string;
+	brandDomain: string;
 	response: string;
 	prompt: string;
-	promptId?: string;
 }): Promise<BrandAnalysisResult> {
-	const { workspaceId, response, prompt } = args;
-
-	const workspace = await getWorkspaceById({ workspaceId });
+	const { brandName, brandDomain, response, prompt } = args;
 
 	const result = await runAnalysis({
-		brandDomain: workspace.domain,
-		brandName: workspace.name,
+		brandDomain,
+		brandName,
 		response,
 		prompt,
 	});
 
-	result.metadata = {
-		brandName: workspace.name,
-		brandDomain: workspace.domain,
-	};
-
+	result.metadata = { brandName, brandDomain };
 	return result;
 }
 
@@ -46,6 +40,7 @@ export async function analysePromptsForWorkspace(args: {
 	remainingCount: number;
 }> {
 	const { workspaceId, batchSize = 50, analyzeAll = false } = args;
+	const workspace = await getWorkspaceById({ workspaceId });
 
 	let totalAnalyzed = 0;
 	let totalFailed = 0;
@@ -107,10 +102,10 @@ export async function analysePromptsForWorkspace(args: {
 		for (const resp of responses) {
 			try {
 				const analysisResult = await analysePromptResponse({
-					workspaceId: resp.workspace_id,
+					brandName: workspace.name,
+					brandDomain: workspace.domain,
 					response: resp.response,
 					prompt: resp.prompt,
-					promptId: resp.prompt_id,
 				});
 
 				analysisRows.push({

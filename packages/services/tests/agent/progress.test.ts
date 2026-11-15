@@ -101,7 +101,13 @@ describe("updateProviderProgress GEO finalization", () => {
 			analysedCount: 2,
 			failedCount: 1,
 			remainingCount: 1,
-			errors: [{ responseId: "response-1", modelProvider: "chatgpt", error: "invalid output" }],
+			errors: [
+				{
+					responseId: "response-1",
+					modelProvider: "chatgpt",
+					error: "invalid output",
+				},
+			],
 		});
 
 		const result = await updateProviderProgress({

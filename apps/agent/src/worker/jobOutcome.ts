@@ -1,4 +1,4 @@
-export type ProviderFinalStatus = "completed" | "failed";
+type ProviderFinalStatus = "completed" | "failed";
 
 export function resolveProviderOutcome(args: {
 	captureSucceeded: boolean;

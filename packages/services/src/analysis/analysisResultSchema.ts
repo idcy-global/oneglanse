@@ -119,17 +119,17 @@ const brandAnalysisSchema = z
 		}
 
 		if (value.presence.mentioned) {
+			const rankValues: Record<number, number> = {
+				1: 100,
+				2: 80,
+				3: 65,
+				4: 50,
+				5: 40,
+			};
 			const rankValue =
 				value.position.rankPosition === null
 					? 15
-					: ({
-							1: 100,
-							2: 80,
-							3: 65,
-							4: 50,
-							5: 40,
-						}[value.position.rankPosition] ??
-							30);
+					: (rankValues[value.position.rankPosition] ?? 30);
 			const recommendationValue = {
 				top_pick: 100,
 				strong_alternative: 80,

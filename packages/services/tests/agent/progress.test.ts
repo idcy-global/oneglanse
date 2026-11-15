@@ -55,6 +55,7 @@ describe("updateProviderProgress GEO finalization", () => {
 		expect(analysisMock).toHaveBeenCalledWith({
 			workspaceId: "workspace-1",
 			analyzeAll: true,
+			waitForLock: true,
 		});
 		expect(result?.status).toBe("completed");
 		expect(result?.analysisStatus).toBe("completed");

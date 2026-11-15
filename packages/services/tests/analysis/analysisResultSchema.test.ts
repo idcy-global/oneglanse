@@ -18,7 +18,7 @@ const absent = {
 };
 
 const mentioned = {
-	geoScore: { overall: 72 },
+	geoScore: { overall: 86 },
 	presence: { mentioned: true, visibility: 65 },
 	position: { rankPosition: 1 },
 	sentiment: { score: 80 },
@@ -58,6 +58,16 @@ describe("parseBrandAnalysisResult", () => {
 			"target.example",
 		);
 		expect(result.competitors[0]?.domain).toBe("");
+	});
+
+	it("rejects a GEO score that does not match the weighted component formula", () => {
+		expect(() =>
+			parseBrandAnalysisResult(
+				{ ...mentioned, geoScore: { overall: 50 } },
+				"Target Brand",
+				"target.example",
+			),
+		).toThrow("GEO result contract");
 	});
 
 	it("rejects scores outside the documented 0–100 range", () => {

@@ -1,4 +1,5 @@
 import type { Provider } from "@oneglanse/types";
+import { analysePromptsForWorkspace } from "../analysis/analysePromptsForWorkspace.js";
 import { redis } from "./redis.js";
 
 const AGENT_PROGRESS_TTL_SECONDS = 24 * 60 * 60;
@@ -17,6 +18,7 @@ export type AgentJobGroupStatus =
 	| "failed";
 
 export type AgentJobProgress = {
+	workspaceId?: string;
 	status: AgentJobGroupStatus;
 	analysisStatus?: "running" | "completed" | "failed" | "skipped";
 	updateId?: number;
@@ -48,10 +50,14 @@ for _, v in pairs(data['providers']) do
   if v ~= 'completed' and v ~= 'failed' and v ~= 'stopped' then allDone = false; break end
 end
 local ttl = ${AGENT_PROGRESS_TTL_SECONDS}
+local shouldStartAnalysis = 0
 if allDone and data['status'] ~= 'completed' and data['status'] ~= 'failed' then
   if total > 0 then
-    data['status'] = 'analyzing'
-    data['analysisStatus'] = 'running'
+    if data['analysisStatus'] ~= 'running' then
+      data['status'] = 'analyzing'
+      data['analysisStatus'] = 'running'
+      shouldStartAnalysis = 1
+    end
   else
     data['status'] = 'completed'
     data['analysisStatus'] = 'skipped'
@@ -59,7 +65,7 @@ if allDone and data['status'] ~= 'completed' and data['status'] ~= 'failed' then
   end
 end
 redis.call('SET', KEYS[1], cjson.encode(data), 'EX', ttl)
-return cjson.encode(data)
+return {cjson.encode(data), shouldStartAnalysis}
 `;
 
 const COMPLETE_ANALYSIS_LUA = `
@@ -107,7 +113,52 @@ export async function updateProviderProgress(args: {
 		args.status,
 		countArg,
 	);
-	return parseProgress(result);
+	const [rawProgress, shouldStartAnalysis] = Array.isArray(result)
+		? result
+		: [result, 0];
+	let progress = parseProgress(rawProgress);
+
+	if (Number(shouldStartAnalysis) !== 1) return progress;
+	if (!progress?.workspaceId) {
+		console.error(
+			`Cannot start GEO analysis for job group ${args.jobGroupId}: workspaceId missing from progress seed`,
+		);
+		return (
+			(await setJobGroupAnalysisStatus({
+				jobGroupId: args.jobGroupId,
+				status: "failed",
+			})) ?? progress
+		);
+	}
+
+	try {
+		const analysis = await analysePromptsForWorkspace({
+			workspaceId: progress.workspaceId,
+			analyzeAll: true,
+		});
+		if (analysis.failedCount > 0 || analysis.remainingCount > 0) {
+			throw new Error(
+				`GEO analysis incomplete: ${analysis.analysedCount} analyzed, ${analysis.failedCount} failed, ${analysis.remainingCount} remaining`,
+			);
+		}
+		progress =
+			(await setJobGroupAnalysisStatus({
+				jobGroupId: args.jobGroupId,
+				status: "completed",
+			})) ?? progress;
+	} catch (err) {
+		console.error(
+			`GEO analysis failed for job group ${args.jobGroupId}:`,
+			err instanceof Error ? err.message : String(err),
+		);
+		progress =
+			(await setJobGroupAnalysisStatus({
+				jobGroupId: args.jobGroupId,
+				status: "failed",
+			})) ?? progress;
+	}
+
+	return progress;
 }
 
 export async function setJobGroupAnalysisStatus(args: {

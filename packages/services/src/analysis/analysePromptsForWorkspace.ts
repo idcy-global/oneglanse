@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { clickhouse } from "@oneglanse/db";
 import { toErrorMessage } from "@oneglanse/errors";
 import type {
@@ -6,9 +7,51 @@ import type {
 	PromptResponse,
 } from "@oneglanse/types";
 import { v4 as uuidv4 } from "uuid";
+import { redis } from "../agent/redis.js";
 import { getWorkspaceById } from "../workspace/index.js";
 import { getNextAnalysisCursor } from "./analysisCursor.js";
 import { runAnalysis } from "./runAnalysis.js";
+
+const ANALYSIS_LOCK_TTL_SECONDS = 4 * 60 * 60;
+const ANALYSIS_LOCK_WAIT_TIMEOUT_MS = 10 * 60 * 1000;
+const ANALYSIS_LOCK_POLL_MS = 250;
+
+type AnalysisLock = { key: string; token: string };
+
+async function acquireAnalysisLock(
+	workspaceId: string,
+	waitForLock: boolean,
+): Promise<AnalysisLock> {
+	const lock = {
+		key: "workspace:" + workspaceId + ":geo-analysis-lock",
+		token: randomUUID(),
+	};
+	const deadline = Date.now() + (waitForLock ? ANALYSIS_LOCK_WAIT_TIMEOUT_MS : 0);
+
+	while (true) {
+		const acquired = await redis.set(
+			lock.key,
+			lock.token,
+			"EX",
+			ANALYSIS_LOCK_TTL_SECONDS,
+			"NX",
+		);
+		if (acquired === "OK") return lock;
+		if (!waitForLock || Date.now() >= deadline) {
+			throw new Error("GEO analysis is already running for this workspace");
+		}
+		await new Promise((resolve) => setTimeout(resolve, ANALYSIS_LOCK_POLL_MS));
+	}
+}
+
+async function releaseAnalysisLock(lock: AnalysisLock): Promise<void> {
+	await redis.eval(
+		"if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+		1,
+		lock.key,
+		lock.token,
+	);
+}
 
 async function analysePromptResponse(args: {
 	brandName: string;
@@ -33,14 +76,23 @@ export async function analysePromptsForWorkspace(args: {
 	workspaceId: string;
 	batchSize?: number;
 	analyzeAll?: boolean;
+	waitForLock?: boolean;
 }): Promise<{
 	analysedCount: number;
 	failedCount: number;
 	errors: Array<{ responseId: string; modelProvider: string; error: string }>;
 	remainingCount: number;
 }> {
-	const { workspaceId, batchSize = 50, analyzeAll = false } = args;
-	const workspace = await getWorkspaceById({ workspaceId });
+	const {
+		workspaceId,
+		batchSize = 50,
+		analyzeAll = false,
+		waitForLock = false,
+	} = args;
+	const lock = await acquireAnalysisLock(workspaceId, waitForLock);
+
+	try {
+		const workspace = await getWorkspaceById({ workspaceId });
 
 	let totalAnalyzed = 0;
 	let totalFailed = 0;
@@ -194,4 +246,12 @@ export async function analysePromptsForWorkspace(args: {
 		errors: allErrors,
 		remainingCount,
 	};
+	} finally {
+		await releaseAnalysisLock(lock).catch((err) => {
+			console.error(
+				"Failed to release GEO analysis lock:",
+				toErrorMessage(err),
+			);
+		});
+	}
 }

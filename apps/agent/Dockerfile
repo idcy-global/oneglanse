@@ -30,6 +30,7 @@ ARG PNPM_VERSION=10.16.0
 ARG CAMOUFOX_PIP_SPEC
 ARG CAMOUFOX_BROWSER_CHANNEL
 
+# Keep Camoufox Juggler aligned with Python Playwright below 1.61.
 RUN apt-get update && apt-get install -y --no-install-recommends \
   python3 \
   python3-pip \
@@ -45,7 +46,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && fc-cache -f \
   && test -n "${CAMOUFOX_PIP_SPEC}" \
   && test -n "${CAMOUFOX_BROWSER_CHANNEL}" \
-  # Camoufox's bundled Juggler protocol is incompatible with Playwright 1.61+.
   && python3 -m pip install --no-cache-dir --break-system-packages \
     "${CAMOUFOX_PIP_SPEC}" \
     "playwright<1.61" \

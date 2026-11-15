@@ -39,8 +39,9 @@ type ProviderJobData = {
 const AGENT_PROGRESS_TTL_SECONDS = 24 * 60 * 60;
 const activeProviderStops = new Map<string, () => Promise<void>>();
 
-function buildProgressSeed(providers: Provider[], promptCount: number): string {
+function buildProgressSeed(\n\tproviders: Provider[],\n\tpromptCount: number,\n\tworkspaceId: string,\n): string {
 	return JSON.stringify({
+		workspaceId,
 		status: "pending" as const,
 		updateId: 0,
 		providers: Object.fromEntries(
@@ -61,10 +62,11 @@ async function ensureProgressSeed(
 	progressKey: string,
 	providers: Provider[],
 	promptCount: number,
+	workspaceId: string,
 ): Promise<void> {
 	await redis.set(
 		progressKey,
-		buildProgressSeed(providers, promptCount),
+		buildProgressSeed(providers, promptCount, workspaceId),
 		"EX",
 		AGENT_PROGRESS_TTL_SECONDS,
 		"NX",
@@ -137,7 +139,7 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 	}
 
 	const progressKey = `job:${jobGroupId}:result`;
-	await ensureProgressSeed(progressKey, ownedProviders, prompts.length);
+	await ensureProgressSeed(progressKey, ownedProviders, prompts.length, workspace_id);
 
 	const executionAdapter = providerRouter.resolve({
 		provider,

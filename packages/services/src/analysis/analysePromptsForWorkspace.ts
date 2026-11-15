@@ -7,6 +7,7 @@ import type {
 } from "@oneglanse/types";
 import { v4 as uuidv4 } from "uuid";
 import { getWorkspaceById } from "../workspace/index.js";
+import { getNextAnalysisCursor } from "./analysisCursor.js";
 import { runAnalysis } from "./runAnalysis.js";
 
 async function analysePromptResponse(args: {
@@ -15,7 +16,7 @@ async function analysePromptResponse(args: {
 	prompt: string;
 	promptId?: string;
 }): Promise<BrandAnalysisResult> {
-	const { workspaceId, response, prompt, promptId } = args;
+	const { workspaceId, response, prompt } = args;
 
 	const workspace = await getWorkspaceById({ workspaceId });
 
@@ -53,24 +54,39 @@ export async function analysePromptsForWorkspace(args: {
 		modelProvider: string;
 		error: string;
 	}> = [];
-
-	// offset advances the cursor independently of ClickHouse mutation completion.
-	// ALTER TABLE UPDATE is async — without OFFSET, the same rows are returned
-	// every iteration until the background mutation finishes, causing duplicate
-	// processing and a potential infinite loop.
-	let offset = 0;
+	let cursor: { promptRunAt: string; id: string } | null = null;
 	let hasMore = true;
+
 	while (hasMore) {
 		const result = await clickhouse.query({
 			query: `
-                SELECT *
-                FROM analytics.prompt_responses
-                WHERE workspace_id = {workspaceId:String}
-                  AND is_analysed = false
+                SELECT pr.*
+                FROM analytics.prompt_responses AS pr
+                LEFT ANTI JOIN analytics.prompt_analysis AS pa
+                  ON pr.prompt_id = pa.prompt_id
+                  AND pr.prompt_run_at = pa.prompt_run_at
+                  AND pr.model_provider = pa.model_provider
+                  AND pr.workspace_id = pa.workspace_id
+                WHERE pr.workspace_id = {workspaceId:String}
+                  AND pr.is_analysed = false
+                  AND (
+                    {cursorSet:UInt8} = 0
+                    OR pr.prompt_run_at > {cursorPromptRunAt:DateTime}
+                    OR (
+                      pr.prompt_run_at = {cursorPromptRunAt:DateTime}
+                      AND pr.id > {cursorId:String}
+                    )
+                  )
+                ORDER BY pr.prompt_run_at ASC, pr.id ASC
                 LIMIT {batchSize:UInt32}
-                OFFSET {offset:UInt32}
             `,
-			query_params: { workspaceId, batchSize, offset },
+			query_params: {
+				workspaceId,
+				batchSize,
+				cursorSet: cursor ? 1 : 0,
+				cursorPromptRunAt: cursor?.promptRunAt ?? "1970-01-01 00:00:00",
+				cursorId: cursor?.id ?? "",
+			},
 			format: "JSONEachRow",
 		});
 
@@ -88,7 +104,6 @@ export async function analysePromptsForWorkspace(args: {
 			error: string;
 		}> = [];
 
-		// Analyze each response
 		for (const resp of responses) {
 			try {
 				const analysisResult = await analysePromptResponse({
@@ -118,7 +133,6 @@ export async function analysePromptsForWorkspace(args: {
 					errorMessage,
 				);
 
-				// Collect error details for frontend
 				errors.push({
 					responseId: resp.id,
 					modelProvider: resp.model_provider,
@@ -149,36 +163,33 @@ export async function analysePromptsForWorkspace(args: {
 		totalAnalyzed += analysisRows.length;
 		totalFailed += errors.length;
 		allErrors = allErrors.concat(errors);
-		offset += batchSize;
 
-		// If not analyzing all, stop after first batch
+		// A keyset cursor is independent of ClickHouse's asynchronous UPDATE
+		// mutation. The anti-join also prevents reprocessing rows whose analysis
+		// insert succeeded even if the is_analysed flag has not caught up yet.
+		cursor = getNextAnalysisCursor(responses);
 		if (!analyzeAll) {
 			hasMore = false;
 		} else {
-			// Check if there are more to process
-			hasMore = responses.length === batchSize;
-			// Give ClickHouse 100ms to process the async ALTER TABLE mutation
-			// before the next SELECT. Without this, a narrow window exists where
-			// the mutation hasn't landed yet and the OFFSET cursor is the only
-			// safeguard against duplicate processing.
-			if (hasMore) {
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
+			hasMore = responses.length === batchSize && cursor !== null;
 		}
 	}
 
-	// Check remaining count
 	const remainingResult = await clickhouse.query({
 		query: `
-            SELECT count() as count
-            FROM analytics.prompt_responses
-            WHERE workspace_id = {workspaceId:String}
-              AND is_analysed = false
+            SELECT count() AS count
+            FROM analytics.prompt_responses AS pr
+            LEFT ANTI JOIN analytics.prompt_analysis AS pa
+              ON pr.prompt_id = pa.prompt_id
+              AND pr.prompt_run_at = pa.prompt_run_at
+              AND pr.model_provider = pa.model_provider
+              AND pr.workspace_id = pa.workspace_id
+            WHERE pr.workspace_id = {workspaceId:String}
+              AND pr.is_analysed = false
         `,
 		query_params: { workspaceId },
 		format: "JSONEachRow",
 	});
-
 	const remainingData: Array<{ count: string }> = await remainingResult.json();
 	const remainingCount = Number(remainingData[0]?.count || 0);
 

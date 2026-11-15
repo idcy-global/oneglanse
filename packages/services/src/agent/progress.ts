@@ -135,6 +135,7 @@ export async function updateProviderProgress(args: {
 		const analysis = await analysePromptsForWorkspace({
 			workspaceId: progress.workspaceId,
 			analyzeAll: true,
+			waitForLock: true,
 		});
 		if (analysis.failedCount > 0 || analysis.remainingCount > 0) {
 			throw new Error(

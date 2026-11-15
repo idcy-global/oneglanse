@@ -4,7 +4,6 @@ import {
 	buildProviderJobId,
 	hasRuntimeProviderAuth,
 	redis,
-	setJobGroupAnalysisStatus,
 	storePromptResponses,
 	updateProviderProgress,
 	writeProviderAuthStatus,
@@ -22,7 +21,6 @@ import { createProviderLogger, logger } from "@oneglanse/utils";
 import type { Job } from "bullmq";
 import { providerRouter } from "../provider-adapters/index.js";
 import { StopProviderRunError } from "../lib/browser/proxy/runner.js";
-import { runAnalysisInBackground } from "./analysis.js";
 import { resolveProviderOutcome } from "./jobOutcome.js";
 
 type ProviderStatus = "pending" | "running" | "completed" | "failed" | "stopped";
@@ -332,7 +330,7 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 			}
 		}
 
-		const finalProgress = await Promise.all(
+		await Promise.all(
 			ownedProviders.map((currentProvider) => {
 				const outcome = resolveProviderOutcome({
 					captureSucceeded:
@@ -353,36 +351,6 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 				});
 			}),
 		);
-
-		// The atomic Redis progress transition elects exactly one final provider
-		// job to run workspace-wide analysis after every provider has finished.
-		if (finalProgress.some((progress) => progress?.status === "analyzing")) {
-			try {
-				const analysis = await runAnalysisInBackground({
-					workspaceId: workspace_id,
-					provider,
-					jobGroupId,
-				});
-				if (analysis.failedCount > 0 || analysis.remainingCount > 0) {
-					throw new Error(
-						`GEO analysis incomplete: ${analysis.analysedCount} analyzed, ${analysis.failedCount} failed, ${analysis.remainingCount} remaining`,
-					);
-				}
-				await setJobGroupAnalysisStatus({
-					jobGroupId,
-					status: "completed",
-				});
-			} catch (analysisErr) {
-				plog.error(
-					"GEO analysis failed after provider capture:",
-					toErrorMessage(analysisErr),
-				);
-				await setJobGroupAnalysisStatus({
-					jobGroupId,
-					status: "failed",
-				});
-			}
-		}
 
 		return true;
 	} finally {

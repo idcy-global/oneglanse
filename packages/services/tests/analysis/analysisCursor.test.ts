@@ -16,8 +16,6 @@ describe("getNextAnalysisCursor", () => {
 
 	it("returns null for an empty or invalid page", () => {
 		expect(getNextAnalysisCursor([])).toBeNull();
-		expect(
-			getNextAnalysisCursor([{ prompt_run_at: "", id: "a" }]),
-		).toBeNull();
+		expect(getNextAnalysisCursor([{ prompt_run_at: "", id: "a" }])).toBeNull();
 	});
 });

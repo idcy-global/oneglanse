@@ -45,8 +45,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && fc-cache -f \
   && test -n "${CAMOUFOX_PIP_SPEC}" \
   && test -n "${CAMOUFOX_BROWSER_CHANNEL}" \
+  # Camoufox's bundled Juggler protocol is incompatible with Playwright 1.61+.
   && python3 -m pip install --no-cache-dir --break-system-packages \
     "${CAMOUFOX_PIP_SPEC}" \
+    "playwright<1.61" \
   && python3 -m camoufox set "${CAMOUFOX_BROWSER_CHANNEL}" \
   && python3 -m camoufox fetch \
   && rm -rf /var/lib/apt/lists/*

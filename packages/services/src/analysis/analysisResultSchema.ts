@@ -117,6 +117,80 @@ const brandAnalysisSchema = z
 				message: "top_pick requires absolute rank position 1.",
 			});
 		}
+
+		if (value.presence.mentioned) {
+			const rankValue =
+				value.position.rankPosition === null
+					? 15
+					: ({
+							1: 100,
+							2: 80,
+							3: 65,
+							4: 50,
+							5: 40,
+						}[value.position.rankPosition] ??
+							30);
+			const recommendationValue = {
+				top_pick: 100,
+				strong_alternative: 80,
+				conditional: 60,
+				mentioned_only: 30,
+				discouraged: 10,
+				not_mentioned: 0,
+			}[value.recommendation.type];
+			const expectedGeoScore = Math.round(
+				(value.presence.visibility +
+					rankValue +
+					value.sentiment.score +
+					recommendationValue) /
+					4,
+			);
+
+			if (Math.abs(value.geoScore.overall - expectedGeoScore) > 3) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["geoScore", "overall"],
+					message: "GEO score must match the documented weighted formula within 3 points.",
+				});
+			}
+			if (value.sentiment.score <= 20 && value.geoScore.overall > 25) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["geoScore", "overall"],
+					message: "A sentiment score at or below 20 caps GEO score at 25.",
+				});
+			}
+			if (
+				(value.presence.visibility <= 15 && value.geoScore.overall > 45) ||
+				(value.presence.visibility < 20 && value.geoScore.overall > 40)
+			) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["geoScore", "overall"],
+					message: "Low visibility must apply the documented GEO score cap.",
+				});
+			}
+			if (
+				value.recommendation.type === "discouraged" &&
+				value.geoScore.overall > 30
+			) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["geoScore", "overall"],
+					message: "A discouraged recommendation caps GEO score at 30.",
+				});
+			}
+			if (
+				value.recommendation.type === "mentioned_only" &&
+				value.geoScore.overall > 35
+			) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ["geoScore", "overall"],
+					message: "A mentioned-only recommendation caps GEO score at 35.",
+				});
+			}
+		}
 	});
 
 function normalizeDomain(value: string): string {

@@ -324,7 +324,6 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 					toErrorMessage(storeErr),
 				);
 			}
-
 		}
 
 		const finalProgress = await Promise.all(

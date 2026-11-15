@@ -146,7 +146,7 @@ function showProviderToast(args: {
 		{
 			id: PROVIDER_RUN_TOAST_ID,
 			duration:
-				args.phase === "pending" || args.phase === "running"
+				args.phase === "pending" || args.phase === "running" || args.phase === "analyzing"
 					? Number.POSITIVE_INFINITY
 					: args.phase === "stopped"
 						? STOPPED_HANDOFF_DELAY_MS
@@ -471,6 +471,7 @@ function useProviderRunToast(args: {
 
 export function ProviderRunToastManager() {
 	const router = useRouter();
+	const utils = api.useUtils();
 	const pathname = usePathname();
 	const searchParams = useSafeSearchParams();
 	const urlWorkspaceId = searchParams.get("workspace") ?? "";
@@ -530,7 +531,24 @@ export function ProviderRunToastManager() {
 	});
 
 	useEffect(() => {
-		if (jobStatusQuery.data?.status !== "completed") return;
+		const terminalStatus = jobStatusQuery.data?.status;
+		if (terminalStatus !== "completed" && terminalStatus !== "failed") return;
+
+		if (terminalStatus === "failed") {
+			toast.error(
+				"GEO analysis did not finish. Check the analysis model configuration and retry the report.",
+			);
+		}
+
+		if (activeRun?.workspaceId) {
+			void utils.analysis.fetchAnalysis.invalidate({
+				workspaceId: activeRun.workspaceId,
+			});
+			void utils.prompt.fetchPromptSources.invalidate({
+				workspaceId: activeRun.workspaceId,
+			});
+		}
+		router.refresh();
 		clearActiveProviderRun();
 		setPersistedRun(null);
 		if (activeRun?.jobId) {
@@ -547,11 +565,13 @@ export function ProviderRunToastManager() {
 		}
 	}, [
 		activeRun?.jobId,
+		activeRun?.workspaceId,
 		jobStatusQuery.data?.status,
 		pathname,
 		router,
 		searchParams,
 		urlJobId,
+		utils,
 	]);
 
 	return null;

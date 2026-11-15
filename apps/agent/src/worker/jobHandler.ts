@@ -39,7 +39,11 @@ type ProviderJobData = {
 const AGENT_PROGRESS_TTL_SECONDS = 24 * 60 * 60;
 const activeProviderStops = new Map<string, () => Promise<void>>();
 
-function buildProgressSeed(\n\tproviders: Provider[],\n\tpromptCount: number,\n\tworkspaceId: string,\n): string {
+function buildProgressSeed(
+	providers: Provider[],
+	promptCount: number,
+	workspaceId: string,
+): string {
 	return JSON.stringify({
 		workspaceId,
 		status: "pending" as const,

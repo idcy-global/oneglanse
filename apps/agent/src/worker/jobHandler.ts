@@ -4,9 +4,9 @@ import {
 	buildProviderJobId,
 	hasRuntimeProviderAuth,
 	redis,
+	setJobGroupAnalysisStatus,
 	storePromptResponses,
 	updateProviderProgress,
-	setJobGroupAnalysisStatus,
 	writeProviderAuthStatus,
 } from "@oneglanse/services";
 import type {
@@ -193,7 +193,8 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 	const captureMetadataByProvider: Partial<
 		Record<Provider, PromptCaptureMetadata>
 	> = {};
-	const persistedResultCounts: Partial<Record<Provider, number>> = {};\n\tconst persistenceSucceededProviders = new Set<Provider>();
+	const persistedResultCounts: Partial<Record<Provider, number>> = {};
+	const persistenceSucceededProviders = new Set<Provider>();
 
 	registerActiveProviderStop(jobGroupId, provider, async () => {
 		stopController.abort();

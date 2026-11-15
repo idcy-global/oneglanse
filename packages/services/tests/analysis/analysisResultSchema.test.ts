@@ -44,7 +44,9 @@ const mentioned = {
 
 describe("parseBrandAnalysisResult", () => {
 	it("accepts the exact absent-brand defaults", () => {
-		expect(parseBrandAnalysisResult(absent, "Target Brand", "target.example")).toMatchObject({
+		expect(
+			parseBrandAnalysisResult(absent, "Target Brand", "target.example"),
+		).toMatchObject({
 			presence: { mentioned: false, visibility: 0 },
 			sentiment: { score: 0 },
 			recommendation: { type: "not_mentioned" },

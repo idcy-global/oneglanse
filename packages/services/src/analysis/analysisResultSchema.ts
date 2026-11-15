@@ -200,7 +200,7 @@ function normalizeDomain(value: string): string {
 		.replace(/^https?:\/\//, "")
 		.replace(/^www\./, "")
 		.split(/[/?#]/, 1)[0]
-		.replace(/\.$/, "");
+		?.replace(/\.$/, "") ?? "";
 }
 
 export function parseBrandAnalysisResult(

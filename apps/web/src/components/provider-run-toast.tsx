@@ -250,6 +250,7 @@ function useProviderRunToast(args: {
 		}
 
 		const providerStates = parsed.providers;
+		const status = parsed.status;
 		const previousStates = previousProviderStatesRef.current;
 		const pendingProviders = PROVIDER_LIST.filter(
 			(provider) => providerStates[provider] === "pending",

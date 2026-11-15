@@ -22,6 +22,7 @@ import type { Job } from "bullmq";
 import { providerRouter } from "../provider-adapters/index.js";
 import { StopProviderRunError } from "../lib/browser/proxy/runner.js";
 import { runAnalysisInBackground } from "./analysis.js";
+import { resolveProviderOutcome } from "./jobOutcome.js";
 
 type ProviderStatus = "pending" | "running" | "completed" | "failed" | "stopped";
 type ProviderJobData = {
@@ -191,6 +192,7 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 	const captureMetadataByProvider: Partial<
 		Record<Provider, PromptCaptureMetadata>
 	> = {};
+	const persistedProviders = new Set<Provider>();
 
 	registerActiveProviderStop(jobGroupId, provider, async () => {
 		stopController.abort();
@@ -302,6 +304,9 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 					promptRunAt: executionTime,
 					captureMetadata: captureMetadataByProvider,
 				});
+				for (const currentProvider of fulfilledProviders) {
+					persistedProviders.add(currentProvider);
+				}
 			} catch (storeErr) {
 				// Extraction succeeded but save failed — log prominently but do not
 				// rethrow. Rethrowing would cause BullMQ to retry the entire job
@@ -313,26 +318,31 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 				);
 			}
 
+			if (persistedProviders.size > 0) {
 			runAnalysisInBackground({
 				workspaceId: workspace_id,
 				userId: user_id,
 				provider,
 				jobGroupId,
 			});
+			}
 		}
 
 		await Promise.all(
-			ownedProviders.map((currentProvider) =>
-				updateProviderProgress({
+			ownedProviders.map((currentProvider) => {
+				const outcome = resolveProviderOutcome({
+					captureSucceeded:
+						providerResults[currentProvider].status === "fulfilled",
+					persistenceSucceeded: persistedProviders.has(currentProvider),
+					resultCount: providerResults[currentProvider].data.length,
+				});
+				return updateProviderProgress({
 					jobGroupId,
 					provider: currentProvider,
-					status:
-						providerResults[currentProvider].status === "fulfilled"
-							? "completed"
-							: "failed",
-					resultCount: providerResults[currentProvider].data.length,
-				}),
-			),
+					status: outcome.status,
+					resultCount: outcome.resultCount,
+				});
+			}),
 		);
 
 		return true;

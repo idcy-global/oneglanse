@@ -130,6 +130,28 @@ with Camoufox(headless=True, exclude_addons=list(DefaultAddons)) as browser:
     page.set_content("<title>OneGlanse image test</title>")
     assert page.title() == "OneGlanse image test"
 PY
+      ONEGLANSE_APP_MODE=local node --input-type=module <<"JS"
+import assert from "node:assert/strict";
+import { firefox } from "playwright-core";
+import { resolveCamoufoxLaunchOptions } from "./dist/lib/browser/camoufox.js";
+
+const launchOptions = await resolveCamoufoxLaunchOptions({
+  provider: "chatgpt",
+  headlessMode: "headless",
+  disableDefaultAddons: true,
+});
+const browser = await firefox.launch(launchOptions);
+try {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.setContent("<title>OneGlanse Node runtime test</title>");
+  assert.equal(await page.title(), "OneGlanse Node runtime test");
+  await context.close();
+  console.log("Agent Node Playwright + Camoufox runtime passed");
+} finally {
+  await browser.close();
+}
+JS
     '
     containers+=("$prefix-agent")
     docker run -d --name "$prefix-agent" --network "$prefix" \

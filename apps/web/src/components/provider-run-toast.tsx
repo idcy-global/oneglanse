@@ -10,13 +10,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type ProviderState = "pending" | "running" | "completed" | "failed" | "stopped";
 
 type ProviderProgressResponse = {
+	status?: "pending" | "analyzing" | "completed" | "failed";
 	updateId?: number;
 	providers?: Record<string, ProviderState>;
 	results?: Record<string, number>;
 	stats?: { totalPrompts?: number };
 };
 
-type DisplayPhase = "pending" | "running" | "completed" | "failed" | "stopped";
+type DisplayPhase = "pending" | "running" | "analyzing" | "completed" | "failed" | "stopped";
 
 const PROVIDER_RUN_TOAST_ID = "provider-run-progress";
 const COMPLETION_TOAST_DURATION_MS = 1400;
@@ -164,11 +165,13 @@ function useProviderRunToast(args: {
 	const stopProviderMutation = api.agent.stopProvider.useMutation();
 	const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const latestParsedRef = useRef<{
+		status: "pending" | "analyzing" | "completed" | "failed";
 		updateId: number;
 		providers: Record<string, ProviderState>;
 		results: Record<string, number>;
 		totalPrompts?: number;
 	}>({
+		status: "pending",
 		updateId: 0,
 		providers: {},
 		results: {},
@@ -187,6 +190,7 @@ function useProviderRunToast(args: {
 	const parsed = useMemo(() => {
 		const data = response as ProviderProgressResponse | null | undefined;
 		return {
+			status: data?.status ?? "pending",
 			updateId: data?.updateId ?? 0,
 			providers: (data?.providers ?? {}) as Record<string, ProviderState>,
 			results: (data?.results ?? {}) as Record<string, number>,
@@ -299,6 +303,23 @@ function useProviderRunToast(args: {
 				const nextRunningProvider = PROVIDER_LIST.find(
 					(provider) => latest.providers[provider] === "running",
 				);
+				if (!nextRunningProvider && latest.status === "analyzing") {
+					const analysisProvider =
+						PROVIDER_LIST.find(
+							(provider) => latest.providers[provider] === "completed",
+						) ?? PROVIDER_LIST[0];
+					if (analysisProvider) {
+						displayRef.current = {
+							provider: analysisProvider,
+							phase: "analyzing",
+						};
+						showProviderToast({
+							provider: analysisProvider,
+							phase: "analyzing",
+						});
+						return;
+					}
+				}
 				if (nextRunningProvider) {
 					const nextPromptNumber =
 						(latest.results[nextRunningProvider] ?? 0) > 0
@@ -328,6 +349,20 @@ function useProviderRunToast(args: {
 			return;
 		}
 
+		if (currentDisplay?.phase === "analyzing") {
+			if (status === "completed" || status === "failed") {
+				displayRef.current = {
+					provider: currentDisplay.provider,
+					phase: status,
+				};
+				showProviderToast({
+					provider: currentDisplay.provider,
+					phase: status,
+				});
+			}
+			return;
+		}
+
 		if (
 			currentDisplay?.phase === "completed" ||
 			currentDisplay?.phase === "failed" ||
@@ -343,6 +378,26 @@ function useProviderRunToast(args: {
 				: undefined;
 
 		if (!nextRunningProvider) {
+			if (status === "analyzing") {
+				const analysisProvider =
+					PROVIDER_LIST.find(
+						(provider) => providerStates[provider] === "completed",
+					) ?? PROVIDER_LIST[0];
+				if (
+					analysisProvider &&
+					currentDisplay?.phase !== "analyzing"
+				) {
+					displayRef.current = {
+						provider: analysisProvider,
+						phase: "analyzing",
+					};
+					showProviderToast({
+						provider: analysisProvider,
+						phase: "analyzing",
+					});
+				}
+				return;
+			}
 			const nextPendingProvider = pendingProviders[0];
 			if (nextPendingProvider) {
 				if (

@@ -17,7 +17,13 @@ type ProviderProgressResponse = {
 	stats?: { totalPrompts?: number };
 };
 
-type DisplayPhase = "pending" | "running" | "analyzing" | "completed" | "failed" | "stopped";
+type DisplayPhase =
+	| "pending"
+	| "running"
+	| "analyzing"
+	| "completed"
+	| "failed"
+	| "stopped";
 
 const PROVIDER_RUN_TOAST_ID = "provider-run-progress";
 const COMPLETION_TOAST_DURATION_MS = 1400;
@@ -146,7 +152,9 @@ function showProviderToast(args: {
 		{
 			id: PROVIDER_RUN_TOAST_ID,
 			duration:
-				args.phase === "pending" || args.phase === "running" || args.phase === "analyzing"
+				args.phase === "pending" ||
+				args.phase === "running" ||
+				args.phase === "analyzing"
 					? Number.POSITIVE_INFINITY
 					: args.phase === "stopped"
 						? STOPPED_HANDOFF_DELAY_MS
@@ -384,10 +392,7 @@ function useProviderRunToast(args: {
 					PROVIDER_LIST.find(
 						(provider) => providerStates[provider] === "completed",
 					) ?? PROVIDER_LIST[0];
-				if (
-					analysisProvider &&
-					currentDisplay?.phase !== "analyzing"
-				) {
+				if (analysisProvider && currentDisplay?.phase !== "analyzing") {
 					displayRef.current = {
 						provider: analysisProvider,
 						phase: "analyzing",

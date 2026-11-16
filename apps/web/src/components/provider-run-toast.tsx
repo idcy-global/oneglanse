@@ -10,13 +10,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type ProviderState = "pending" | "running" | "completed" | "failed" | "stopped";
 
 type ProviderProgressResponse = {
+	status?: "pending" | "analyzing" | "completed" | "failed";
 	updateId?: number;
 	providers?: Record<string, ProviderState>;
 	results?: Record<string, number>;
 	stats?: { totalPrompts?: number };
 };
 
-type DisplayPhase = "pending" | "running" | "completed" | "failed" | "stopped";
+type DisplayPhase = "pending" | "running" | "analyzing" | "completed" | "failed" | "stopped";
 
 const PROVIDER_RUN_TOAST_ID = "provider-run-progress";
 const COMPLETION_TOAST_DURATION_MS = 1400;
@@ -145,7 +146,7 @@ function showProviderToast(args: {
 		{
 			id: PROVIDER_RUN_TOAST_ID,
 			duration:
-				args.phase === "pending" || args.phase === "running"
+				args.phase === "pending" || args.phase === "running" || args.phase === "analyzing"
 					? Number.POSITIVE_INFINITY
 					: args.phase === "stopped"
 						? STOPPED_HANDOFF_DELAY_MS
@@ -164,11 +165,13 @@ function useProviderRunToast(args: {
 	const stopProviderMutation = api.agent.stopProvider.useMutation();
 	const completionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const latestParsedRef = useRef<{
+		status: "pending" | "analyzing" | "completed" | "failed";
 		updateId: number;
 		providers: Record<string, ProviderState>;
 		results: Record<string, number>;
 		totalPrompts?: number;
 	}>({
+		status: "pending",
 		updateId: 0,
 		providers: {},
 		results: {},
@@ -187,6 +190,7 @@ function useProviderRunToast(args: {
 	const parsed = useMemo(() => {
 		const data = response as ProviderProgressResponse | null | undefined;
 		return {
+			status: data?.status ?? "pending",
 			updateId: data?.updateId ?? 0,
 			providers: (data?.providers ?? {}) as Record<string, ProviderState>,
 			results: (data?.results ?? {}) as Record<string, number>,
@@ -246,6 +250,7 @@ function useProviderRunToast(args: {
 		}
 
 		const providerStates = parsed.providers;
+		const status = parsed.status;
 		const previousStates = previousProviderStatesRef.current;
 		const pendingProviders = PROVIDER_LIST.filter(
 			(provider) => providerStates[provider] === "pending",
@@ -299,6 +304,23 @@ function useProviderRunToast(args: {
 				const nextRunningProvider = PROVIDER_LIST.find(
 					(provider) => latest.providers[provider] === "running",
 				);
+				if (!nextRunningProvider && latest.status === "analyzing") {
+					const analysisProvider =
+						PROVIDER_LIST.find(
+							(provider) => latest.providers[provider] === "completed",
+						) ?? PROVIDER_LIST[0];
+					if (analysisProvider) {
+						displayRef.current = {
+							provider: analysisProvider,
+							phase: "analyzing",
+						};
+						showProviderToast({
+							provider: analysisProvider,
+							phase: "analyzing",
+						});
+						return;
+					}
+				}
 				if (nextRunningProvider) {
 					const nextPromptNumber =
 						(latest.results[nextRunningProvider] ?? 0) > 0
@@ -328,6 +350,20 @@ function useProviderRunToast(args: {
 			return;
 		}
 
+		if (currentDisplay?.phase === "analyzing") {
+			if (status === "completed" || status === "failed") {
+				displayRef.current = {
+					provider: currentDisplay.provider,
+					phase: status,
+				};
+				showProviderToast({
+					provider: currentDisplay.provider,
+					phase: status,
+				});
+			}
+			return;
+		}
+
 		if (
 			currentDisplay?.phase === "completed" ||
 			currentDisplay?.phase === "failed" ||
@@ -343,6 +379,26 @@ function useProviderRunToast(args: {
 				: undefined;
 
 		if (!nextRunningProvider) {
+			if (status === "analyzing") {
+				const analysisProvider =
+					PROVIDER_LIST.find(
+						(provider) => providerStates[provider] === "completed",
+					) ?? PROVIDER_LIST[0];
+				if (
+					analysisProvider &&
+					currentDisplay?.phase !== "analyzing"
+				) {
+					displayRef.current = {
+						provider: analysisProvider,
+						phase: "analyzing",
+					};
+					showProviderToast({
+						provider: analysisProvider,
+						phase: "analyzing",
+					});
+				}
+				return;
+			}
 			const nextPendingProvider = pendingProviders[0];
 			if (nextPendingProvider) {
 				if (
@@ -416,6 +472,7 @@ function useProviderRunToast(args: {
 
 export function ProviderRunToastManager() {
 	const router = useRouter();
+	const utils = api.useUtils();
 	const pathname = usePathname();
 	const searchParams = useSafeSearchParams();
 	const urlWorkspaceId = searchParams.get("workspace") ?? "";
@@ -475,7 +532,24 @@ export function ProviderRunToastManager() {
 	});
 
 	useEffect(() => {
-		if (jobStatusQuery.data?.status !== "completed") return;
+		const terminalStatus = jobStatusQuery.data?.status;
+		if (terminalStatus !== "completed" && terminalStatus !== "failed") return;
+
+		if (terminalStatus === "failed") {
+			toast.error(
+				"GEO analysis did not finish. Check the analysis model configuration and retry the report.",
+			);
+		}
+
+		if (activeRun?.workspaceId) {
+			void utils.analysis.fetchAnalysis.invalidate({
+				workspaceId: activeRun.workspaceId,
+			});
+			void utils.prompt.fetchPromptSources.invalidate({
+				workspaceId: activeRun.workspaceId,
+			});
+		}
+		router.refresh();
 		clearActiveProviderRun();
 		setPersistedRun(null);
 		if (activeRun?.jobId) {
@@ -492,11 +566,13 @@ export function ProviderRunToastManager() {
 		}
 	}, [
 		activeRun?.jobId,
+		activeRun?.workspaceId,
 		jobStatusQuery.data?.status,
 		pathname,
 		router,
 		searchParams,
 		urlJobId,
+		utils,
 	]);
 
 	return null;

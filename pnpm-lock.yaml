@@ -15,6 +15,12 @@ importers:
       '@colbymchenry/codegraph':
         specifier: 1.6.0
         version: 1.6.0
+      '@oneglanse/services':
+        specifier: workspace:*
+        version: link:packages/services
+      '@oneglanse/types':
+        specifier: workspace:*
+        version: link:packages/types
       knip:
         specifier: ^5.85.0
         version: 5.85.0(@types/node@25.3.3)(typescript@5.9.3)

@@ -206,7 +206,7 @@ export default function Prompts() {
 			ba: NonNullable<AnalysisRecord["brand_analysis"]>,
 		) =>
 			ba.geoScore.overall === 0 &&
-			ba.sentiment.score === 50 &&
+			(ba.sentiment.score === 0 || ba.sentiment.score === 50) &&
 			ba.presence.visibility === 0 &&
 			ba.position.rankPosition === null;
 

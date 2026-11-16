@@ -3,6 +3,7 @@ import type { AnalysisInputSingle, BrandAnalysisResult } from "@oneglanse/types"
 import { env } from "../env.js";
 import { chatgpt, claude } from "../llm/index.js";
 import { analysisPrompt } from "./analysisPrompt.js";
+import { parseBrandAnalysisResult } from "./analysisResultSchema.js";
 
 const systemPrompt =
 	"You are an expert brand intelligence analyst. " +
@@ -115,9 +116,9 @@ export async function runAnalysis(
 		);
 	}
 
-	if (typeof parsed !== "object" || parsed === null) {
-		throw new ValidationError("Invalid JSON shape", { type: typeof parsed });
-	}
-
-	return parsed as BrandAnalysisResult;
+	return parseBrandAnalysisResult(
+		parsed,
+		input.brandName,
+		input.brandDomain,
+	);
 }

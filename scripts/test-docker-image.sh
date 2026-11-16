@@ -117,7 +117,11 @@ case "$app" in
       -e OPENAI_BASE_URL=http://127.0.0.1:4010/v1 \
       -e ANALYSIS_OPENAI_API=chat -e ANALYSIS_OPENAI_MODEL=mock-geo-analysis \
       "$image" >/dev/null
-    docker exec -i "$prefix-web" node --input-type=module < scripts/test-web-image.mjs
+    containers+=("$prefix-e2e")
+    docker run -d --name "$prefix-e2e" --network "$prefix" --network-alias mock-llm \
+      -v "$PWD:/workspace:ro" -w /workspace \
+      node:20-bookworm-slim sleep 600 >/dev/null
+    docker exec -i "$prefix-e2e" node --input-type=module < scripts/test-web-image.mjs
     ;;
   agent)
     docker run --rm --network none --entrypoint sh "$image" -ec '

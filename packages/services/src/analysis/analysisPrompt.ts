@@ -356,7 +356,7 @@ Severity:
 
 Before outputting, verify ALL of these. If any fail, fix the output:
 
-1. If mentioned = false → geoScore.overall = 0, visibility = 0, recommendation.type = "not_mentioned", sentiment.score = 50, rankPosition = null, coreClaims = [], differentiators = [], bestKnownFor = null.
+1. If mentioned = false → geoScore.overall = 0, visibility = 0, recommendation.type = "not_mentioned", sentiment.score = 0, rankPosition = null, coreClaims = [], differentiators = [], bestKnownFor = null.
 2. If mentioned = true → visibility >= 1.
 3. If sentiment.score >= 81 → there must be explicit superlative language traceable to the text.
 4. If recommendation.type = "not_mentioned" → mentioned = false.

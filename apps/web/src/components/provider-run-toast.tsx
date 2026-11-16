@@ -392,7 +392,7 @@ function useProviderRunToast(args: {
 					PROVIDER_LIST.find(
 						(provider) => providerStates[provider] === "completed",
 					) ?? PROVIDER_LIST[0];
-				if (analysisProvider && currentDisplay?.phase !== "analyzing") {
+				if (analysisProvider) {
 					displayRef.current = {
 						provider: analysisProvider,
 						phase: "analyzing",

@@ -1,4 +1,4 @@
-export type AnalysisPageCursor = {
+type AnalysisPageCursor = {
 	promptRunAt: string;
 	id: string;
 };

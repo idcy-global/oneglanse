@@ -5,7 +5,7 @@ import { PROVIDER_LIST } from "@oneglanse/types";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 
-const baseUrl = "http://localhost:3000";
+const baseUrl = "http://web:3000";
 const cookies = new Map();
 const mockAnalysisResult = {
 	geoScore: { overall: 86 },

@@ -119,8 +119,18 @@ case "$app" in
       "$image" >/dev/null
     containers+=("$prefix-e2e")
     docker run -d --name "$prefix-e2e" --network "$prefix" --network-alias mock-llm \
-      -v "$PWD:/workspace:ro" -w /workspace \
+      -v "$PWD:/workspace" -w /workspace \
       node:20-bookworm-slim sleep 600 >/dev/null
+    # The E2E harness imports the same workspace service packages used by Web.
+    # Build those packages in the runner so their package.json exports resolve
+    # to dist/ rather than requiring unpublished files inside the production image.
+    docker network connect bridge "$prefix-e2e"
+    docker exec "$prefix-e2e" sh -ec '
+      corepack enable
+      corepack prepare pnpm@10.16.0 --activate
+      pnpm install --frozen-lockfile
+      pnpm --filter @oneglanse/services... build
+    '
     docker exec -i "$prefix-e2e" node --input-type=module < scripts/test-web-image.mjs
     ;;
   agent)

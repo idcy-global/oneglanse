@@ -75,7 +75,7 @@ async function request(path, body) {
 		signal: AbortSignal.timeout(15000),
 		headers: {
 			"Content-Type": "application/json",
-			Origin: baseUrl,
+			Origin: "http://localhost:3000",
 			Cookie: [...cookies]
 				.map(([name, value]) => `${name}=${value}`)
 				.join("; "),

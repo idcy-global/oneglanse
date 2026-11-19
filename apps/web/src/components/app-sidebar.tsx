@@ -190,7 +190,7 @@ export function AppSidebar({
 											"h-11 px-4 hover:bg-stone-100 dark:hover:bg-neutral-900",
 										)}
 									>
-										<div className="flex items-center gap-2 min-w-0">
+										<div className="flex min-w-0 items-center gap-2">
 											{activeWorkspaceFavicon &&
 											activeWorkspaceFavicon !== failedWorkspaceFavicon ? (
 												<img
@@ -204,7 +204,7 @@ export function AppSidebar({
 											) : (
 												<LayoutGrid className="h-4 w-4 shrink-0 text-gray-500" />
 											)}
-											<div className="flex flex-col min-w-0">
+											<div className="flex min-w-0 flex-col">
 												<span className="text-sm font-medium truncate">
 													{activeWorkspace?.name ?? "Select Workspace"}
 												</span>
@@ -248,7 +248,7 @@ export function AppSidebar({
 																""
 															}
 															alt=""
-															className="w-4 h-4 rounded-[var(--app-radius)] shrink-0"
+															className="h-4 w-4 shrink-0 rounded-[var(--app-radius)]"
 														/>
 														<span className="truncate">{ws.name}</span>
 														{ws.id === activeWorkspace?.id && (

@@ -74,8 +74,9 @@ export function useDashboardData(
 		let rankSum = 0;
 		let rankCount = 0;
 
-		// avgSentiment
+		// Sentiment is meaningful only for responses that mention the target brand.
 		let sentimentSum = 0;
+		let sentimentCount = 0;
 
 		// impactMetrics
 		let visibilitySum = 0;
@@ -125,8 +126,11 @@ export function useDashboardData(
 				rankCount++;
 			}
 
-			// avgSentiment
-			sentimentSum += analysis.sentiment.score;
+			// avgSentiment: exclude absent-brand responses from the denominator.
+			if (analysis.presence.mentioned) {
+				sentimentSum += analysis.sentiment.score;
+				sentimentCount++;
+			}
 
 			// impactMetrics
 			visibilitySum += analysis.presence.visibility;
@@ -195,7 +199,8 @@ export function useDashboardData(
 		const avgRankPosition =
 			rankCount > 0 ? Math.round(rankSum / rankCount) : null;
 
-		const avgSentimentScore = Math.round(sentimentSum / total);
+		const avgSentimentScore =
+			sentimentCount > 0 ? Math.round(sentimentSum / sentimentCount) : 0;
 
 		const competitorList = [...competitorMap.values()]
 			.map((c) => ({

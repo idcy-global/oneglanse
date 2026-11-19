@@ -31,6 +31,12 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     networks:
       - data
       - backend

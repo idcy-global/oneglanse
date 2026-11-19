@@ -6,6 +6,12 @@ type InsertFallbackOptions<T extends Record<string, unknown>> = {
 	onRecordFailed?: (value: T, err: unknown) => void;
 };
 
+export type ClickHouseInsertResult = {
+	attemptedCount: number;
+	savedCount: number;
+	failedCount: number;
+};
+
 // Shared batch-insert pattern: attempts a batch insert first, then falls back
 // to one-by-one inserts to salvage partial writes when possible.
 export async function insertClickHouseWithFallback<
@@ -14,11 +20,16 @@ export async function insertClickHouseWithFallback<
 	table: string,
 	values: T[],
 	opts: InsertFallbackOptions<T> = {},
-): Promise<void> {
+): Promise<ClickHouseInsertResult> {
 	const { throwOnAllFailed = false, onRecordFailed } = opts;
 
 	try {
 		await clickhouse.insert({ table, values, format: "JSONEachRow" });
+		return {
+			attemptedCount: values.length,
+			savedCount: values.length,
+			failedCount: 0,
+		};
 	} catch (batchErr) {
 		console.error(
 			`⚠️ ClickHouse batch insert failed for ${table}:`,
@@ -26,6 +37,7 @@ export async function insertClickHouseWithFallback<
 		);
 
 		let successCount = 0;
+		let failedCount = 0;
 		for (const value of values) {
 			try {
 				await clickhouse.insert({
@@ -35,6 +47,7 @@ export async function insertClickHouseWithFallback<
 				});
 				successCount++;
 			} catch (individualErr) {
+				failedCount++;
 				onRecordFailed?.(value, individualErr);
 			}
 		}
@@ -53,5 +66,11 @@ export async function insertClickHouseWithFallback<
 				`❌ All inserts failed for ${table}, but job will continue`,
 			);
 		}
+
+		return {
+			attemptedCount: values.length,
+			savedCount: successCount,
+			failedCount,
+		};
 	}
 }

@@ -93,6 +93,7 @@ case "$app" in
     docker run --rm --network "$prefix" \
       -e CLICKHOUSE_URL=http://clickhouse:8123 \
       -e CLICKHOUSE_USER=default -e "CLICKHOUSE_PASSWORD=$test_password" \
+      -e CLICKHOUSE_DB=oneglanse \
       -w /workspace "$image" pnpm --filter @oneglanse/db clickhouse:migrate
     for column in adapter_id capture_type capture_model capture_region capture_locale \
       estimated_cost_usd job_group_id execution_started_at execution_completed_at; do
@@ -113,8 +114,26 @@ case "$app" in
       -e REDIS_HOST=redis -e "REDIS_PASSWORD=$test_password" \
       -e CLICKHOUSE_URL=http://clickhouse:8123 \
       -e CLICKHOUSE_USER=default -e "CLICKHOUSE_PASSWORD=$test_password" -e CLICKHOUSE_DB=oneglanse \
+      -e OPENAI_API_KEY=e2e-test-key \
+      -e OPENAI_BASE_URL=http://mock-llm:4010/v1 \
+      -e ANALYSIS_OPENAI_API=chat -e ANALYSIS_OPENAI_MODEL=mock-geo-analysis \
       "$image" >/dev/null
-    docker exec -i "$prefix-web" node --input-type=module < scripts/test-web-image.mjs
+    containers+=("$prefix-e2e")
+    docker run -d --name "$prefix-e2e" --network "$prefix" --network-alias mock-llm \
+      -e "DATABASE_URL=postgresql://postgres:$test_password@db:5432/oneglanse" \
+      -v "$PWD:/workspace" -w /workspace \
+      node:20-bookworm-slim sleep 600 >/dev/null
+    # The E2E harness imports the same workspace service packages used by Web.
+    # Build those packages in the runner so their package.json exports resolve
+    # to dist/ rather than requiring unpublished files inside the production image.
+    docker network connect bridge "$prefix-e2e"
+    docker exec "$prefix-e2e" sh -ec '
+      corepack enable
+      corepack prepare pnpm@10.16.0 --activate
+      pnpm install --frozen-lockfile
+      pnpm --filter @oneglanse/services... build
+    '
+    docker exec -i "$prefix-e2e" node --input-type=module < scripts/test-web-image.mjs
     ;;
   agent)
     docker run --rm --network none --entrypoint sh "$image" -ec '

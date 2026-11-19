@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { clickhouse } from "@oneglanse/db";
 import { toErrorMessage } from "@oneglanse/errors";
 import type {
@@ -6,31 +7,68 @@ import type {
 	PromptResponse,
 } from "@oneglanse/types";
 import { v4 as uuidv4 } from "uuid";
+import { redis } from "../agent/redis.js";
 import { getWorkspaceById } from "../workspace/index.js";
+import { getNextAnalysisCursor } from "./analysisCursor.js";
 import { runAnalysis } from "./runAnalysis.js";
 
+const ANALYSIS_LOCK_TTL_SECONDS = 4 * 60 * 60;
+const ANALYSIS_LOCK_WAIT_TIMEOUT_MS = 10 * 60 * 1000;
+const ANALYSIS_LOCK_POLL_MS = 250;
+
+type AnalysisLock = { key: string; token: string };
+
+async function acquireAnalysisLock(
+	workspaceId: string,
+	waitForLock: boolean,
+): Promise<AnalysisLock> {
+	const lock = {
+		key: "workspace:" + workspaceId + ":geo-analysis-lock",
+		token: randomUUID(),
+	};
+	const deadline = Date.now() + (waitForLock ? ANALYSIS_LOCK_WAIT_TIMEOUT_MS : 0);
+
+	while (true) {
+		const acquired = await redis.set(
+			lock.key,
+			lock.token,
+			"EX",
+			ANALYSIS_LOCK_TTL_SECONDS,
+			"NX",
+		);
+		if (acquired === "OK") return lock;
+		if (!waitForLock || Date.now() >= deadline) {
+			throw new Error("GEO analysis is already running for this workspace");
+		}
+		await new Promise((resolve) => setTimeout(resolve, ANALYSIS_LOCK_POLL_MS));
+	}
+}
+
+async function releaseAnalysisLock(lock: AnalysisLock): Promise<void> {
+	await redis.eval(
+		"if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end",
+		1,
+		lock.key,
+		lock.token,
+	);
+}
+
 async function analysePromptResponse(args: {
-	workspaceId: string;
+	brandName: string;
+	brandDomain: string;
 	response: string;
 	prompt: string;
-	promptId?: string;
 }): Promise<BrandAnalysisResult> {
-	const { workspaceId, response, prompt, promptId } = args;
-
-	const workspace = await getWorkspaceById({ workspaceId });
+	const { brandName, brandDomain, response, prompt } = args;
 
 	const result = await runAnalysis({
-		brandDomain: workspace.domain,
-		brandName: workspace.name,
+		brandDomain,
+		brandName,
 		response,
 		prompt,
 	});
 
-	result.metadata = {
-		brandName: workspace.name,
-		brandDomain: workspace.domain,
-	};
-
+	result.metadata = { brandName, brandDomain };
 	return result;
 }
 
@@ -38,13 +76,23 @@ export async function analysePromptsForWorkspace(args: {
 	workspaceId: string;
 	batchSize?: number;
 	analyzeAll?: boolean;
+	waitForLock?: boolean;
 }): Promise<{
 	analysedCount: number;
 	failedCount: number;
 	errors: Array<{ responseId: string; modelProvider: string; error: string }>;
 	remainingCount: number;
 }> {
-	const { workspaceId, batchSize = 50, analyzeAll = false } = args;
+	const {
+		workspaceId,
+		batchSize = 50,
+		analyzeAll = false,
+		waitForLock = false,
+	} = args;
+	const lock = await acquireAnalysisLock(workspaceId, waitForLock);
+
+	try {
+		const workspace = await getWorkspaceById({ workspaceId });
 
 	let totalAnalyzed = 0;
 	let totalFailed = 0;
@@ -53,24 +101,39 @@ export async function analysePromptsForWorkspace(args: {
 		modelProvider: string;
 		error: string;
 	}> = [];
-
-	// offset advances the cursor independently of ClickHouse mutation completion.
-	// ALTER TABLE UPDATE is async — without OFFSET, the same rows are returned
-	// every iteration until the background mutation finishes, causing duplicate
-	// processing and a potential infinite loop.
-	let offset = 0;
+	let cursor: { promptRunAt: string; id: string } | null = null;
 	let hasMore = true;
+
 	while (hasMore) {
 		const result = await clickhouse.query({
 			query: `
-                SELECT *
-                FROM analytics.prompt_responses
-                WHERE workspace_id = {workspaceId:String}
-                  AND is_analysed = false
+                SELECT pr.*
+                FROM analytics.prompt_responses AS pr
+                LEFT ANTI JOIN analytics.prompt_analysis AS pa
+                  ON pr.prompt_id = pa.prompt_id
+                  AND pr.prompt_run_at = pa.prompt_run_at
+                  AND pr.model_provider = pa.model_provider
+                  AND pr.workspace_id = pa.workspace_id
+                WHERE pr.workspace_id = {workspaceId:String}
+                  AND pr.is_analysed = false
+                  AND (
+                    {cursorSet:UInt8} = 0
+                    OR pr.prompt_run_at > {cursorPromptRunAt:DateTime}
+                    OR (
+                      pr.prompt_run_at = {cursorPromptRunAt:DateTime}
+                      AND pr.id > {cursorId:String}
+                    )
+                  )
+                ORDER BY pr.prompt_run_at ASC, pr.id ASC
                 LIMIT {batchSize:UInt32}
-                OFFSET {offset:UInt32}
             `,
-			query_params: { workspaceId, batchSize, offset },
+			query_params: {
+				workspaceId,
+				batchSize,
+				cursorSet: cursor ? 1 : 0,
+				cursorPromptRunAt: cursor?.promptRunAt ?? "1970-01-01 00:00:00",
+				cursorId: cursor?.id ?? "",
+			},
 			format: "JSONEachRow",
 		});
 
@@ -88,14 +151,13 @@ export async function analysePromptsForWorkspace(args: {
 			error: string;
 		}> = [];
 
-		// Analyze each response
 		for (const resp of responses) {
 			try {
 				const analysisResult = await analysePromptResponse({
-					workspaceId: resp.workspace_id,
+					brandName: workspace.name,
+					brandDomain: workspace.domain,
 					response: resp.response,
 					prompt: resp.prompt,
-					promptId: resp.prompt_id,
 				});
 
 				analysisRows.push({
@@ -118,7 +180,6 @@ export async function analysePromptsForWorkspace(args: {
 					errorMessage,
 				);
 
-				// Collect error details for frontend
 				errors.push({
 					responseId: resp.id,
 					modelProvider: resp.model_provider,
@@ -149,36 +210,33 @@ export async function analysePromptsForWorkspace(args: {
 		totalAnalyzed += analysisRows.length;
 		totalFailed += errors.length;
 		allErrors = allErrors.concat(errors);
-		offset += batchSize;
 
-		// If not analyzing all, stop after first batch
+		// A keyset cursor is independent of ClickHouse's asynchronous UPDATE
+		// mutation. The anti-join also prevents reprocessing rows whose analysis
+		// insert succeeded even if the is_analysed flag has not caught up yet.
+		cursor = getNextAnalysisCursor(responses);
 		if (!analyzeAll) {
 			hasMore = false;
 		} else {
-			// Check if there are more to process
-			hasMore = responses.length === batchSize;
-			// Give ClickHouse 100ms to process the async ALTER TABLE mutation
-			// before the next SELECT. Without this, a narrow window exists where
-			// the mutation hasn't landed yet and the OFFSET cursor is the only
-			// safeguard against duplicate processing.
-			if (hasMore) {
-				await new Promise((resolve) => setTimeout(resolve, 100));
-			}
+			hasMore = responses.length === batchSize && cursor !== null;
 		}
 	}
 
-	// Check remaining count
 	const remainingResult = await clickhouse.query({
 		query: `
-            SELECT count() as count
-            FROM analytics.prompt_responses
-            WHERE workspace_id = {workspaceId:String}
-              AND is_analysed = false
+            SELECT count() AS count
+            FROM analytics.prompt_responses AS pr
+            LEFT ANTI JOIN analytics.prompt_analysis AS pa
+              ON pr.prompt_id = pa.prompt_id
+              AND pr.prompt_run_at = pa.prompt_run_at
+              AND pr.model_provider = pa.model_provider
+              AND pr.workspace_id = pa.workspace_id
+            WHERE pr.workspace_id = {workspaceId:String}
+              AND pr.is_analysed = false
         `,
 		query_params: { workspaceId },
 		format: "JSONEachRow",
 	});
-
 	const remainingData: Array<{ count: string }> = await remainingResult.json();
 	const remainingCount = Number(remainingData[0]?.count || 0);
 
@@ -188,4 +246,12 @@ export async function analysePromptsForWorkspace(args: {
 		errors: allErrors,
 		remainingCount,
 	};
+	} finally {
+		await releaseAnalysisLock(lock).catch((err) => {
+			console.error(
+				"Failed to release GEO analysis lock:",
+				toErrorMessage(err),
+			);
+		});
+	}
 }

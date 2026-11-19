@@ -26,7 +26,7 @@ export const agentRouter = createTRPCRouter({
 		.input(z.object({ jobId: z.string() }))
 		.output(
 			z.object({
-				status: z.enum(["pending", "completed"]),
+				status: z.enum(["pending", "analyzing", "completed", "failed"]),
 				response: z.unknown(),
 			}),
 		)
@@ -39,8 +39,14 @@ export const agentRouter = createTRPCRouter({
 			}
 
 			const parsed = JSON.parse(result);
+			const status =
+				parsed?.status === "analyzing" ||
+				parsed?.status === "completed" ||
+				parsed?.status === "failed"
+					? parsed.status
+					: "pending";
 			return {
-				status: parsed?.status === "completed" ? "completed" : "pending",
+				status,
 				response: parsed,
 			};
 		}),

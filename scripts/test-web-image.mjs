@@ -1,9 +1,73 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { storePromptResponses } from "@oneglanse/services";
+import { PROVIDER_LIST } from "@oneglanse/types";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 
-const baseUrl = "http://localhost:3000";
+const baseUrl = "http://web:3000";
 const cookies = new Map();
+const mockAnalysisResult = {
+	geoScore: { overall: 86 },
+	presence: { mentioned: true, visibility: 65 },
+	position: { rankPosition: 1 },
+	sentiment: { score: 80 },
+	recommendation: { type: "top_pick" },
+	competitors: [
+		{
+			name: "Example Competitor",
+			domain: "competitor.example",
+			visibility: 35,
+			sentiment: 55,
+			rankPosition: 2,
+			isRecommended: false,
+		},
+	],
+	perception: {
+		coreClaims: ["Reliable managed hosting"],
+		differentiators: ["24/7 support"],
+		bestKnownFor: "Managed hosting",
+		pricingPerception: "mid_range",
+	},
+	risks: { items: [] },
+};
+let mockAnalysisRequestCount = 0;
+const mockLlmServer = createServer(async (request, response) => {
+	if (request.method !== "POST" || request.url !== "/v1/chat/completions") {
+		response.writeHead(404).end();
+		return;
+	}
+	let body = "";
+	for await (const chunk of request) body += chunk;
+	const payload = JSON.parse(body);
+	const userMessage = payload.messages?.find((message) => message.role === "user")?.content ?? "";
+	assert.match(userMessage, /Image Test/);
+	mockAnalysisRequestCount++;
+	response.writeHead(200, { "Content-Type": "application/json" });
+	response.end(
+		JSON.stringify({
+			id: "chatcmpl-oneglanse-e2e",
+			object: "chat.completion",
+			created: Math.floor(Date.now() / 1000),
+			model: "mock-geo-analysis",
+			choices: [
+				{
+					index: 0,
+					message: {
+						role: "assistant",
+						content: JSON.stringify(mockAnalysisResult),
+					},
+					finish_reason: "stop",
+				},
+			],
+			usage: { prompt_tokens: 120, completion_tokens: 90, total_tokens: 210 },
+		}),
+	);
+});
+await new Promise((resolve, reject) => {
+	mockLlmServer.once("error", reject);
+	mockLlmServer.listen(4010, "0.0.0.0", resolve);
+});
 
 async function request(path, body) {
 	const response = await fetch(`${baseUrl}${path}`, {
@@ -11,7 +75,7 @@ async function request(path, body) {
 		signal: AbortSignal.timeout(15000),
 		headers: {
 			"Content-Type": "application/json",
-			Origin: baseUrl,
+			Origin: "http://localhost:3000",
 			Cookie: [...cookies]
 				.map(([name, value]) => `${name}=${value}`)
 				.join("; "),
@@ -77,10 +141,85 @@ assert.ok(workspaceId);
 const workspaces = await rpc("workspace.listAllForUser");
 assert.ok(JSON.stringify(workspaces).includes(workspaceId));
 
-const prompts = ["Which brands offer image testing?"];
+const prompts = ["Would you recommend Image Test for managed hosting?"];
 await rpc("prompt.store", { workspaceId, prompts }, true);
 const stored = await rpc("prompt.fetchUserPrompts", { workspaceId });
-assert.ok(stored.some((prompt) => prompt.prompt === prompts[0]));
+const storedPrompt = stored.find((prompt) => prompt.prompt === prompts[0]);
+assert.ok(storedPrompt);
+
+const promptRunAt = new Date().toISOString();
+const mockResults = Object.fromEntries(
+	PROVIDER_LIST.map((provider) => [
+		provider,
+		{ status: "rejected", data: [] },
+	]),
+);
+mockResults.chatgpt = {
+	status: "fulfilled",
+	data: [
+		{
+			userId: session.user.id,
+			workspaceId,
+			promptId: storedPrompt.id,
+			prompt: prompts[0],
+			response:
+				"Image Test is a reliable managed hosting provider with 24/7 support and clear pricing. I recommend Image Test as a top choice.",
+			sources: [
+				{
+					title: "Managed hosting overview",
+					cited_text: "Image Test provides managed hosting and 24/7 support.",
+					url: "https://example.com/managed-hosting",
+					domain: "example.com",
+				},
+			],
+		},
+	],
+};
+const captureTime = new Date().toISOString();
+const persisted = await storePromptResponses({
+	results: mockResults,
+	userId: session.user.id,
+	workspaceId,
+	promptRunAt,
+	captureMetadata: {
+		chatgpt: {
+			adapterId: "mock:chatgpt",
+			captureType: "mock",
+			model: "mock-provider",
+			region: "ci",
+			locale: "en-US",
+			startedAt: captureTime,
+			completedAt: captureTime,
+			estimatedCostUsd: 0,
+			jobGroupId: "web-image-e2e",
+		},
+	},
+});
+assert.deepEqual(persisted, {
+	attemptedCount: 1,
+	savedCount: 1,
+	failedCount: 0,
+});
+
+const analysisRun = await rpc(
+	"analysis.analyzeMetrics",
+	{ workspaceId, analyzeAll: true },
+	true,
+);
+assert.equal(analysisRun.analysedCount, 1);
+assert.equal(analysisRun.failedCount, 0);
+assert.equal(analysisRun.remainingCount, 0);
+assert.equal(mockAnalysisRequestCount, 1);
+
+const report = await rpc("analysis.fetchAnalysis", { workspaceId });
+assert.equal(report.length, 1);
+assert.equal(report[0].model_provider, "chatgpt");
+assert.equal(report[0].is_analysed, true);
+assert.equal(report[0].brand_analysis.geoScore.overall, 86);
+assert.equal(report[0].brand_analysis.presence.mentioned, true);
+assert.equal(report[0].brand_analysis.recommendation.type, "top_pick");
+assert.equal(report[0].sources.length, 1);
+assert.equal(report[0].sources[0].url, "https://example.com/managed-hosting");
 await rpc(
 	"workspace.setSchedule",
 	{ workspaceId, schedule: "0 0 1 1 *" },
@@ -110,6 +249,9 @@ for (const route of ["/", "/providers", "/workspace/new"]) {
 	assert.ok(response.ok, `${route}: ${response.status}`);
 	assert.match(await response.text(), /<html/);
 }
+await new Promise((resolve, reject) => {
+	mockLlmServer.close((error) => (error ? reject(error) : resolve()));
+});
 console.log(
-	"Web signup, signin, workspace, prompts, scheduling, Redis status, providers, and pages passed",
+	"Web signup, signin, workspace, prompts, response persistence, citations, GEO analysis, report query, scheduling, providers, and pages passed",
 );

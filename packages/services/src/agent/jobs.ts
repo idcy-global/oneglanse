@@ -194,6 +194,7 @@ export async function submitAgentJobGroup(args: {
 	await waitForRedis();
 
 	const progress = {
+		workspaceId,
 		status: "pending" as const,
 		updateId: 0,
 		providers: Object.fromEntries(

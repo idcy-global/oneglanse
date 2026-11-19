@@ -93,6 +93,7 @@ case "$app" in
     docker run --rm --network "$prefix" \
       -e CLICKHOUSE_URL=http://clickhouse:8123 \
       -e CLICKHOUSE_USER=default -e "CLICKHOUSE_PASSWORD=$test_password" \
+      -e CLICKHOUSE_DB=oneglanse \
       -w /workspace "$image" pnpm --filter @oneglanse/db clickhouse:migrate
     for column in adapter_id capture_type capture_model capture_region capture_locale \
       estimated_cost_usd job_group_id execution_started_at execution_completed_at; do

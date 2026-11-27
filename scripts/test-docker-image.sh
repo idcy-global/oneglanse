@@ -127,6 +127,10 @@ case "$app" in
       -e CLICKHOUSE_DB=oneglanse \
       -e REDIS_HOST=redis \
       -e "REDIS_PASSWORD=$test_password" \
+      -e OPENAI_API_KEY=e2e-test-key \
+      -e OPENAI_BASE_URL=http://127.0.0.1:4010/v1 \
+      -e ANALYSIS_OPENAI_API=chat \
+      -e ANALYSIS_OPENAI_MODEL=mock-geo-analysis \
       -v "$PWD:/workspace" -w /workspace \
       node:20-bookworm-slim sleep 600 >/dev/null
     # The E2E harness imports the same workspace service packages used by Web.

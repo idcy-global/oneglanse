@@ -1,19 +1,82 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { evalMock, analysisMock } = vi.hoisted(() => ({
+const { evalMock, getMock, analysisMock } = vi.hoisted(() => ({
 	evalMock: vi.fn(),
+	getMock: vi.fn(),
 	analysisMock: vi.fn(),
 }));
 
 vi.mock("../../src/agent/redis.js", () => ({
-	redis: { eval: evalMock },
+	redis: { eval: evalMock, get: getMock },
 }));
 
 vi.mock("../../src/analysis/analysePromptsForWorkspace.js", () => ({
 	analysePromptsForWorkspace: analysisMock,
 }));
 
-import { updateProviderProgress } from "../../src/agent/progress.js";
+import {
+	getJobGroupProgressForWorkspace,
+	updateProviderProgress,
+} from "../../src/agent/progress.js";
+
+describe("workspace-scoped job group progress", () => {
+	beforeEach(() => {
+		getMock.mockReset();
+	});
+
+	it("returns progress to the workspace that owns the job group", async () => {
+		const progress = {
+			workspaceId: "workspace-1",
+			status: "running",
+			providers: { chatgpt: "running" },
+		};
+		getMock.mockResolvedValue(JSON.stringify(progress));
+
+		await expect(
+			getJobGroupProgressForWorkspace({
+				jobGroupId: "job-1",
+				workspaceId: "workspace-1",
+			}),
+		).resolves.toEqual(progress);
+		expect(getMock).toHaveBeenCalledWith("job:job-1:result");
+	});
+
+	it("does not expose progress owned by another workspace", async () => {
+		getMock.mockResolvedValue(
+			JSON.stringify({
+				workspaceId: "workspace-2",
+				status: "running",
+				providers: { chatgpt: "running" },
+			}),
+		);
+
+		await expect(
+			getJobGroupProgressForWorkspace({
+				jobGroupId: "job-2",
+				workspaceId: "workspace-1",
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("fails closed when progress is missing or has no workspace owner", async () => {
+		getMock
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(JSON.stringify({ status: "pending" }));
+
+		await expect(
+			getJobGroupProgressForWorkspace({
+				jobGroupId: "missing-job",
+				workspaceId: "workspace-1",
+			}),
+		).resolves.toBeNull();
+		await expect(
+			getJobGroupProgressForWorkspace({
+				jobGroupId: "legacy-job",
+				workspaceId: "workspace-1",
+			}),
+		).resolves.toBeNull();
+	});
+});
 
 describe("updateProviderProgress GEO finalization", () => {
 	beforeEach(() => {

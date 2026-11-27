@@ -31,7 +31,10 @@ ARG CAMOUFOX_PIP_SPEC
 ARG CAMOUFOX_BROWSER_CHANNEL
 
 # Keep Camoufox Juggler aligned with Python Playwright below 1.61.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=secret,id=github_token,required=false \
+  set -eu; \
+  export GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)"; \
+  apt-get update && apt-get install -y --no-install-recommends \
   python3 \
   python3-pip \
   libatomic1 \
@@ -51,6 +54,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     "playwright<1.61" \
   && python3 -m camoufox set "${CAMOUFOX_BROWSER_CHANNEL}" \
   && python3 -m camoufox fetch \
+  && python3 -c "from camoufox.pkgman import installed_verstr; print('Camoufox browser installed:', installed_verstr())" \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -101,8 +101,7 @@ describe("Gemini citation extraction", () => {
 			{
 				rawHref: "https://support.example.com/api",
 				title: "Official API reference",
-				citedText:
-					"Reference documentation for API limits and authentication.",
+				citedText: "Reference documentation for API limits and authentication.",
 			},
 		]);
 	});
@@ -164,15 +163,14 @@ describe("Google AI Overview citation extraction", () => {
 			{
 				rawHref: "https://status.example.com/",
 				title: "Service status report",
-				citedText:
-					"Current uptime and incident history for the service.",
+				citedText: "Current uptime and incident history for the service.",
 			},
 		]);
 	});
 
 	it("reports a missing overview container instead of fabricating sources", async () => {
 		const page = createPage(
-			'<main>No AI Overview is present on this result page.</main>',
+			"<main>No AI Overview is present on this result page.</main>",
 			"https://www.google.com/search?q=managed+hosting",
 		);
 

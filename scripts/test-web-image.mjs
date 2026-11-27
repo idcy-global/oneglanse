@@ -240,7 +240,9 @@ assert.equal(
 );
 
 const emptyJobGroupId = "web-image-empty-provider-e2e";
+const stoppedJobGroupId = "web-image-stopped-provider-e2e";
 const emptyProgressKey = `job:${emptyJobGroupId}:result`;
+const stoppedProgressKey = `job:${stoppedJobGroupId}:result`;
 try {
 	await redis.set(
 		emptyProgressKey,
@@ -274,8 +276,34 @@ try {
 	assert.equal(emptyTerminalProgress?.status, "failed");
 	assert.equal(emptyTerminalProgress?.analysisStatus, "skipped");
 	assert.equal(emptyTerminalProgress?.stats?.actualResponses, 0);
+
+	await redis.set(
+		stoppedProgressKey,
+		JSON.stringify({
+			workspaceId,
+			status: "pending",
+			updateId: 0,
+			providers: { chatgpt: "pending" },
+			results: { chatgpt: 0 },
+			stats: {
+				totalPrompts: 1,
+				expectedResponses: 1,
+				actualResponses: 0,
+			},
+		}),
+		"EX",
+		60,
+	);
+	const stoppedTerminalProgress = await updateProviderProgress({
+		jobGroupId: stoppedJobGroupId,
+		provider: "chatgpt",
+		status: "stopped",
+		resultCount: 0,
+	});
+	assert.equal(stoppedTerminalProgress?.status, "failed");
+	assert.equal(stoppedTerminalProgress?.analysisStatus, "skipped");
 } finally {
-	await redis.del(emptyProgressKey).catch(() => 0);
+	await redis.del(emptyProgressKey, stoppedProgressKey).catch(() => 0);
 	redis.disconnect();
 }
 

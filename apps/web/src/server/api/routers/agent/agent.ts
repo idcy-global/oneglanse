@@ -1,4 +1,9 @@
-import { cancelProviderRun, redis, waitForRedis } from "@oneglanse/services";
+import { NotFoundError } from "@oneglanse/errors";
+import {
+	cancelProviderRun,
+	getJobGroupProgressForWorkspace,
+	waitForRedis,
+} from "@oneglanse/services";
 import { PROVIDER_LIST } from "@oneglanse/types";
 import { z } from "zod";
 import { createRateLimiter } from "../../middleware/rateLimit";
@@ -30,19 +35,21 @@ export const agentRouter = createTRPCRouter({
 				response: z.unknown(),
 			}),
 		)
-		.query(async ({ input }) => {
+		.query(async ({ input, ctx }) => {
 			await waitForRedis();
-			const result = await redis.get(`job:${input.jobId}:result`);
+			const parsed = await getJobGroupProgressForWorkspace({
+				jobGroupId: input.jobId,
+				workspaceId: ctx.workspaceId,
+			});
 
-			if (!result) {
+			if (!parsed) {
 				return { status: "pending" as const, response: null };
 			}
 
-			const parsed = JSON.parse(result);
 			const status =
-				parsed?.status === "analyzing" ||
-				parsed?.status === "completed" ||
-				parsed?.status === "failed"
+				parsed.status === "analyzing" ||
+				parsed.status === "completed" ||
+				parsed.status === "failed"
 					? parsed.status
 					: "pending";
 			return {
@@ -60,7 +67,17 @@ export const agentRouter = createTRPCRouter({
 			}),
 		)
 		.use(validWorkspace)
-		.mutation(async ({ input }) => {
+		.mutation(async ({ input, ctx }) => {
+			await waitForRedis();
+			const progress = await getJobGroupProgressForWorkspace({
+				jobGroupId: input.jobId,
+				workspaceId: ctx.workspaceId,
+			});
+			const providerStatus = progress?.providers?.[input.provider];
+			if (providerStatus !== "pending" && providerStatus !== "running") {
+				throw new NotFoundError("Provider job");
+			}
+
 			return cancelProviderRun({
 				jobGroupId: input.jobId,
 				provider: input.provider,

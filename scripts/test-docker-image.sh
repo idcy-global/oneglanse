@@ -121,6 +121,10 @@ case "$app" in
     containers+=("$prefix-e2e")
     docker run -d --name "$prefix-e2e" --network "$prefix" --network-alias mock-llm \
       -e "DATABASE_URL=postgresql://postgres:$test_password@db:5432/oneglanse" \
+      -e CLICKHOUSE_URL=http://clickhouse:8123 \
+      -e CLICKHOUSE_USER=default \
+      -e "CLICKHOUSE_PASSWORD=$test_password" \
+      -e CLICKHOUSE_DB=oneglanse \
       -v "$PWD:/workspace" -w /workspace \
       node:20-bookworm-slim sleep 600 >/dev/null
     # The E2E harness imports the same workspace service packages used by Web.

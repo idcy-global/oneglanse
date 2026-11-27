@@ -215,6 +215,8 @@ jobs:
             PNPM_VERSION=${{ env.PNPM }}
             ${{ matrix.app == 'agent' && 'CAMOUFOX_PIP_SPEC=cloverlabs-camoufox[geoip]' || '' }}
             ${{ matrix.app == 'agent' && 'CAMOUFOX_BROWSER_CHANNEL=official/prerelease' || '' }}
+          secrets: |
+            github_token=${{ github.token }}
           platforms: linux/${{ matrix.arch }}
           load: ${{ github.event_name == 'pull_request' }}
           tags: ${{ github.event_name == 'pull_request' && format('oneglanse-{0}:ci', matrix.app) || '' }}

@@ -84,7 +84,11 @@ return cjson.encode(data)
 function parseProgress(raw: unknown): AgentJobProgress | null {
 	if (typeof raw !== "string") return null;
 	try {
-		return JSON.parse(raw) as AgentJobProgress;
+		const parsed: unknown = JSON.parse(raw);
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+			return null;
+		}
+		return parsed as AgentJobProgress;
 	} catch {
 		return null;
 	}
@@ -92,6 +96,25 @@ function parseProgress(raw: unknown): AgentJobProgress | null {
 
 export function buildProgressKey(jobGroupId: string): string {
 	return `job:${jobGroupId}:result`;
+}
+
+/**
+ * Return a job-group progress record only to the workspace that created it.
+ * Missing ownership metadata is treated as inaccessible (fail closed).
+ */
+export async function getJobGroupProgressForWorkspace(args: {
+	jobGroupId: string;
+	workspaceId: string;
+}): Promise<AgentJobProgress | null> {
+	const progress = parseProgress(await redis.get(buildProgressKey(args.jobGroupId)));
+	if (
+		!progress ||
+		typeof progress.workspaceId !== "string" ||
+		progress.workspaceId !== args.workspaceId
+	) {
+		return null;
+	}
+	return progress;
 }
 
 export async function updateProviderProgress(args: {

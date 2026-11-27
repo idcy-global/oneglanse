@@ -241,8 +241,10 @@ assert.equal(
 
 const emptyJobGroupId = "web-image-empty-provider-e2e";
 const stoppedJobGroupId = "web-image-stopped-provider-e2e";
+const partialJobGroupId = "web-image-partial-provider-e2e";
 const emptyProgressKey = `job:${emptyJobGroupId}:result`;
 const stoppedProgressKey = `job:${stoppedJobGroupId}:result`;
+const partialProgressKey = `job:${partialJobGroupId}:result`;
 try {
 	await redis.set(
 		emptyProgressKey,
@@ -302,11 +304,100 @@ try {
 	});
 	assert.equal(stoppedTerminalProgress?.status, "failed");
 	assert.equal(stoppedTerminalProgress?.analysisStatus, "skipped");
+
+	const partialResponse =
+		"Image Test offers 24/7 support, proactive monitoring, and managed backups.";
+	const partialPromptRunAt = new Date(Date.now() + 3000).toISOString();
+	const partialCaptureTime = new Date().toISOString();
+	const partialResults = Object.fromEntries(
+		PROVIDER_LIST.map((provider) => [
+			provider,
+			{ status: "rejected", data: [] },
+		]),
+	);
+	partialResults.chatgpt = {
+		status: "fulfilled",
+		data: [
+			{
+				userId: session.user.id,
+				workspaceId,
+				promptId: storedPrompt.id,
+				prompt: prompts[0],
+				response: partialResponse,
+				sources: [
+					{
+						title: "Image Test support",
+						cited_text: "Image Test provides 24/7 support and managed backups.",
+						url: "https://example.com/support",
+						domain: "example.com",
+					},
+				],
+			},
+		],
+	};
+	const partialPersistence = await storePromptResponses({
+		results: partialResults,
+		userId: session.user.id,
+		workspaceId,
+		promptRunAt: partialPromptRunAt,
+		captureMetadata: {
+			chatgpt: {
+				adapterId: "mock:chatgpt",
+				captureType: "mock",
+				model: "mock-provider",
+				region: "ci",
+				locale: "en-US",
+				startedAt: partialCaptureTime,
+				completedAt: partialCaptureTime,
+				estimatedCostUsd: 0,
+				jobGroupId: partialJobGroupId,
+			},
+		},
+	});
+	assert.deepEqual(partialPersistence, {
+		attemptedCount: 1,
+		savedCount: 1,
+		failedCount: 0,
+	});
+
+	await redis.set(
+		partialProgressKey,
+		JSON.stringify({
+			workspaceId,
+			status: "pending",
+			updateId: 0,
+			providers: { chatgpt: "completed", gemini: "pending" },
+			results: { chatgpt: 1, gemini: 0 },
+			stats: {
+				totalPrompts: 1,
+				expectedResponses: 2,
+				actualResponses: 1,
+			},
+		}),
+		"EX",
+		60,
+	);
+	const partialTerminalProgress = await updateProviderProgress({
+		jobGroupId: partialJobGroupId,
+		provider: "gemini",
+		status: "failed",
+		resultCount: 0,
+	});
+	assert.equal(partialTerminalProgress?.status, "completed");
+	assert.equal(partialTerminalProgress?.analysisStatus, "completed");
+	assert.equal(partialTerminalProgress?.providers?.gemini, "failed");
+	assert.equal(partialTerminalProgress?.stats?.actualResponses, 1);
+	assert.equal(mockAnalysisRequestCount, 2);
 } finally {
-	await redis.del(emptyProgressKey, stoppedProgressKey).catch(() => 0);
+	await redis
+		.del(emptyProgressKey, stoppedProgressKey, partialProgressKey)
+		.catch(() => 0);
 	redis.disconnect();
 }
 
+const finalReport = await rpc("analysis.fetchAnalysis", { workspaceId });
+assert.equal(finalReport.length, 2);
+assert.ok(finalReport.some((record) => record.response === partialResponse));
 const status = await rpc("agent.status", { workspaceId, jobId: "image-test" });
 assert.equal(status.status, "pending");
 await request("/api/providers");

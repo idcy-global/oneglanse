@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { storePromptResponses } from "@oneglanse/services";
+import {
+	redis,
+	storePromptResponses,
+	updateProviderProgress,
+} from "@oneglanse/services";
 import { PROVIDER_LIST } from "@oneglanse/types";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
@@ -234,6 +238,75 @@ assert.equal(
 	(await rpc("workspace.getSchedule", { workspaceId })).schedule,
 	null,
 );
+
+const emptyJobGroupId = "web-image-empty-provider-e2e";
+const stoppedJobGroupId = "web-image-stopped-provider-e2e";
+const emptyProgressKey = `job:${emptyJobGroupId}:result`;
+const stoppedProgressKey = `job:${stoppedJobGroupId}:result`;
+try {
+	await redis.set(
+		emptyProgressKey,
+		JSON.stringify({
+			workspaceId,
+			status: "pending",
+			updateId: 0,
+			providers: { chatgpt: "pending", gemini: "pending" },
+			results: { chatgpt: 0, gemini: 0 },
+			stats: {
+				totalPrompts: 1,
+				expectedResponses: 2,
+				actualResponses: 0,
+			},
+		}),
+		"EX",
+		60,
+	);
+	await updateProviderProgress({
+		jobGroupId: emptyJobGroupId,
+		provider: "chatgpt",
+		status: "failed",
+		resultCount: 0,
+	});
+	const emptyTerminalProgress = await updateProviderProgress({
+		jobGroupId: emptyJobGroupId,
+		provider: "gemini",
+		status: "failed",
+		resultCount: 0,
+	});
+	assert.equal(emptyTerminalProgress?.status, "failed");
+	assert.equal(emptyTerminalProgress?.analysisStatus, "skipped");
+	assert.equal(emptyTerminalProgress?.stats?.actualResponses, 0);
+
+	await redis.set(
+		stoppedProgressKey,
+		JSON.stringify({
+			workspaceId,
+			status: "pending",
+			updateId: 0,
+			providers: { chatgpt: "pending" },
+			results: { chatgpt: 0 },
+			stats: {
+				totalPrompts: 1,
+				expectedResponses: 1,
+				actualResponses: 0,
+			},
+		}),
+		"EX",
+		60,
+	);
+	const stoppedTerminalProgress = await updateProviderProgress({
+		jobGroupId: stoppedJobGroupId,
+		provider: "chatgpt",
+		status: "stopped",
+		resultCount: 0,
+	});
+	assert.equal(stoppedTerminalProgress?.status, "failed");
+	assert.equal(stoppedTerminalProgress?.analysisStatus, "skipped");
+} finally {
+	await redis.del(emptyProgressKey, stoppedProgressKey).catch(() => 0);
+	redis.disconnect();
+}
+
 const status = await rpc("agent.status", { workspaceId, jobId: "image-test" });
 assert.equal(status.status, "pending");
 await request("/api/providers");

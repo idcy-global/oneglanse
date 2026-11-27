@@ -46,8 +46,10 @@ local total = 0
 for _, v in pairs(data['results']) do total = total + v end
 data['stats']['actualResponses'] = total
 local allDone = true
+local hasFailedProvider = false
 for _, v in pairs(data['providers']) do
-  if v ~= 'completed' and v ~= 'failed' and v ~= 'stopped' then allDone = false; break end
+  if v == 'failed' or v == 'stopped' then hasFailedProvider = true end
+  if v ~= 'completed' and v ~= 'failed' and v ~= 'stopped' then allDone = false end
 end
 local ttl = ${AGENT_PROGRESS_TTL_SECONDS}
 local shouldStartAnalysis = 0
@@ -59,9 +61,11 @@ if allDone and data['status'] ~= 'completed' and data['status'] ~= 'failed' then
       shouldStartAnalysis = 1
     end
   else
-    data['status'] = 'completed'
+    data['status'] = hasFailedProvider and 'failed' or 'completed'
     data['analysisStatus'] = 'skipped'
-    ttl = ${COMPLETED_TTL_SECONDS}
+    if not hasFailedProvider then
+      ttl = ${COMPLETED_TTL_SECONDS}
+    end
   end
 end
 redis.call('SET', KEYS[1], cjson.encode(data), 'EX', ttl)

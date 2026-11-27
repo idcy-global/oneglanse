@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { storePromptResponses } from "@oneglanse/services";
+import {
+	redis,
+	storePromptResponses,
+	updateProviderProgress,
+} from "@oneglanse/services";
 import { PROVIDER_LIST } from "@oneglanse/types";
 import { randomBytes } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
@@ -234,6 +238,47 @@ assert.equal(
 	(await rpc("workspace.getSchedule", { workspaceId })).schedule,
 	null,
 );
+
+const emptyJobGroupId = "web-image-empty-provider-e2e";
+const emptyProgressKey = `job:${emptyJobGroupId}:result`;
+try {
+	await redis.set(
+		emptyProgressKey,
+		JSON.stringify({
+			workspaceId,
+			status: "pending",
+			updateId: 0,
+			providers: { chatgpt: "pending", gemini: "pending" },
+			results: { chatgpt: 0, gemini: 0 },
+			stats: {
+				totalPrompts: 1,
+				expectedResponses: 2,
+				actualResponses: 0,
+			},
+		}),
+		"EX",
+		60,
+	);
+	await updateProviderProgress({
+		jobGroupId: emptyJobGroupId,
+		provider: "chatgpt",
+		status: "failed",
+		resultCount: 0,
+	});
+	const emptyTerminalProgress = await updateProviderProgress({
+		jobGroupId: emptyJobGroupId,
+		provider: "gemini",
+		status: "failed",
+		resultCount: 0,
+	});
+	assert.equal(emptyTerminalProgress?.status, "failed");
+	assert.equal(emptyTerminalProgress?.analysisStatus, "skipped");
+	assert.equal(emptyTerminalProgress?.stats?.actualResponses, 0);
+} finally {
+	await redis.del(emptyProgressKey).catch(() => 0);
+	redis.disconnect();
+}
+
 const status = await rpc("agent.status", { workspaceId, jobId: "image-test" });
 assert.equal(status.status, "pending");
 await request("/api/providers");

@@ -36,8 +36,32 @@ jobs:
   validate:
     name: Lint, Typecheck, Test, Build
     runs-on: ubuntu-latest
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: ci
+      PGPASSWORD: ci
+      PGDATABASE: oneglanse_ci
     steps:
       - uses: actions/checkout@v4
+      - name: Start the production-compatible PostgreSQL image
+        run: |
+          docker build -f packages/db/Dockerfile -t oneglanse-postgres-ci .
+          docker run -d --name oneglanse-postgres-ci \
+            -e POSTGRES_USER=ci \
+            -e POSTGRES_PASSWORD=ci \
+            -e POSTGRES_DB=oneglanse_ci \
+            -p 5432:5432 \
+            oneglanse-postgres-ci \
+            postgres -c shared_preload_libraries=pg_cron -c cron.database_name=oneglanse_ci
+          for attempt in $(seq 1 30); do
+            if docker exec oneglanse-postgres-ci pg_isready -U ci -d oneglanse_ci; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs oneglanse-postgres-ci
+          exit 1
       - uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM }}
@@ -59,6 +83,69 @@ jobs:
           bash scripts/tests/test-env-file.sh
       - run: pnpm deadcode
       - run: pnpm build
+      - name: Validate PostgreSQL migrations and tenant constraints
+        run: |
+          psql -v ON_ERROR_STOP=1 -f packages/db/drizzle/0000_famous_smiling_tiger.sql
+          psql -v ON_ERROR_STOP=1 -f packages/db/drizzle/0001_commercial_metering.sql
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $
+          DECLARE
+            fk_rejected boolean := false;
+            duplicate_rejected boolean := false;
+            invalid_unit_rejected boolean := false;
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'commercial_usage_events_workspace_org_fk') THEN
+              RAISE EXCEPTION 'Missing workspace organization FK';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'workspaces_id_tenant_id_unique') THEN
+              RAISE EXCEPTION 'Missing tenant attribution unique index';
+            END IF;
+
+            INSERT INTO organization (id, name, created_at) VALUES
+              ('ci-org-a', 'CI Org A', now()),
+              ('ci-org-b', 'CI Org B', now());
+            INSERT INTO workspaces (id, name, slug, domain, tenant_id, created_at)
+              VALUES ('ci-workspace-a', 'CI Workspace A', 'ci-workspace-a', 'a.example', 'ci-org-a', now());
+
+            INSERT INTO commercial_usage_events
+              (organization_id, workspace_id, metric, quantity, idempotency_key, occurred_at)
+              VALUES ('ci-org-a', 'ci-workspace-a', 'ai_detection', 1, 'ci-valid-usage', now());
+
+            BEGIN
+              INSERT INTO commercial_usage_events
+                (organization_id, workspace_id, metric, quantity, idempotency_key, occurred_at)
+                VALUES ('ci-org-b', 'ci-workspace-a', 'ai_detection', 1, 'ci-cross-tenant', now());
+            EXCEPTION WHEN foreign_key_violation THEN
+              fk_rejected := true;
+            END;
+            IF NOT fk_rejected THEN
+              RAISE EXCEPTION 'Cross-tenant workspace attribution was accepted';
+            END IF;
+
+            BEGIN
+              INSERT INTO commercial_usage_events
+                (organization_id, metric, quantity, idempotency_key, occurred_at)
+                VALUES ('ci-org-a', 'ai_detection', 1, 'ci-valid-usage', now());
+            EXCEPTION WHEN unique_violation THEN
+              duplicate_rejected := true;
+            END;
+            IF NOT duplicate_rejected THEN
+              RAISE EXCEPTION 'Duplicate idempotency key was accepted';
+            END IF;
+
+            BEGIN
+              INSERT INTO commercial_usage_events
+                (organization_id, metric, quantity, idempotency_key, occurred_at)
+                VALUES ('ci-org-a', 'ai_detection', 2, 'ci-invalid-unit', now());
+            EXCEPTION WHEN check_violation THEN
+              invalid_unit_rejected := true;
+            END;
+            IF NOT invalid_unit_rejected THEN
+              RAISE EXCEPTION 'Invalid usage quantity was accepted';
+            END IF;
+          END;
+          $;
+          SQL
 
   # ── Detect which apps changed ────────────────────────────────
   changes:
@@ -155,6 +242,10 @@ jobs:
             postgres:
               - 'packages/db/Dockerfile'
               - 'packages/db/init-scripts/**'
+              - 'packages/db/drizzle/**'
+              - 'packages/db/src/schema/**'
+              - 'packages/db/drizzle.config.ts'
+              - 'packages/db/package.json'
               - 'docker-compose.yml'
               - 'scripts/run-compose.mjs'
               - '.github/workflows/build.yml'

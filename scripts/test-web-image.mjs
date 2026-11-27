@@ -242,6 +242,8 @@ assert.equal(
 const emptyJobGroupId = "web-image-empty-provider-e2e";
 const stoppedJobGroupId = "web-image-stopped-provider-e2e";
 const partialJobGroupId = "web-image-partial-provider-e2e";
+const partialResponse =
+	"Image Test offers 24/7 support, proactive monitoring, and managed backups.";
 const emptyProgressKey = `job:${emptyJobGroupId}:result`;
 const stoppedProgressKey = `job:${stoppedJobGroupId}:result`;
 const partialProgressKey = `job:${partialJobGroupId}:result`;
@@ -305,8 +307,6 @@ try {
 	assert.equal(stoppedTerminalProgress?.status, "failed");
 	assert.equal(stoppedTerminalProgress?.analysisStatus, "skipped");
 
-	const partialResponse =
-		"Image Test offers 24/7 support, proactive monitoring, and managed backups.";
 	const partialPromptRunAt = new Date(Date.now() + 3000).toISOString();
 	const partialCaptureTime = new Date().toISOString();
 	const partialResults = Object.fromEntries(

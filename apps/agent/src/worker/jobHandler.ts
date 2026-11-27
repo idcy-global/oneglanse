@@ -21,7 +21,6 @@ import { createProviderLogger, logger } from "@oneglanse/utils";
 import type { Job } from "bullmq";
 import { providerRouter } from "../provider-adapters/index.js";
 import { StopProviderRunError } from "../lib/browser/proxy/runner.js";
-import { runAnalysisInBackground } from "./analysis.js";
 import { resolveProviderOutcome } from "./jobOutcome.js";
 
 type ProviderStatus = "pending" | "running" | "completed" | "failed" | "stopped";
@@ -38,8 +37,13 @@ type ProviderJobData = {
 const AGENT_PROGRESS_TTL_SECONDS = 24 * 60 * 60;
 const activeProviderStops = new Map<string, () => Promise<void>>();
 
-function buildProgressSeed(providers: Provider[], promptCount: number): string {
+function buildProgressSeed(
+	providers: Provider[],
+	promptCount: number,
+	workspaceId: string,
+): string {
 	return JSON.stringify({
+		workspaceId,
 		status: "pending" as const,
 		updateId: 0,
 		providers: Object.fromEntries(
@@ -60,10 +64,11 @@ async function ensureProgressSeed(
 	progressKey: string,
 	providers: Provider[],
 	promptCount: number,
+	workspaceId: string,
 ): Promise<void> {
 	await redis.set(
 		progressKey,
-		buildProgressSeed(providers, promptCount),
+		buildProgressSeed(providers, promptCount, workspaceId),
 		"EX",
 		AGENT_PROGRESS_TTL_SECONDS,
 		"NX",
@@ -136,7 +141,7 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 	}
 
 	const progressKey = `job:${jobGroupId}:result`;
-	await ensureProgressSeed(progressKey, ownedProviders, prompts.length);
+	await ensureProgressSeed(progressKey, ownedProviders, prompts.length, workspace_id);
 
 	const executionAdapter = providerRouter.resolve({
 		provider,
@@ -192,7 +197,8 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 	const captureMetadataByProvider: Partial<
 		Record<Provider, PromptCaptureMetadata>
 	> = {};
-	const persistedProviders = new Set<Provider>();
+	const persistedResultCounts: Partial<Record<Provider, number>> = {};
+	const persistenceSucceededProviders = new Set<Provider>();
 
 	registerActiveProviderStop(jobGroupId, provider, async () => {
 		stopController.abort();
@@ -297,17 +303,22 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 			const partialResults: ModelResult = providerResults;
 
 			try {
-				await storePromptResponses({
+				const persistence = await storePromptResponses({
 					results: partialResults,
 					userId: user_id,
 					workspaceId: workspace_id,
 					promptRunAt: executionTime,
 					captureMetadata: captureMetadataByProvider,
 				});
-				for (const currentProvider of fulfilledProviders) {
-					persistedProviders.add(currentProvider);
+				persistedResultCounts[provider] = persistence.savedCount;
+				if (
+					persistence.failedCount === 0 &&
+					persistence.savedCount === providerResults[provider].data.length
+				) {
+					persistenceSucceededProviders.add(provider);
 				}
 			} catch (storeErr) {
+				persistedResultCounts[provider] = 0;
 				// Extraction succeeded but save failed — log prominently but do not
 				// rethrow. Rethrowing would cause BullMQ to retry the entire job
 				// (re-running the browser and re-querying the AI), which is wasteful
@@ -317,15 +328,6 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 					toErrorMessage(storeErr),
 				);
 			}
-
-			if (persistedProviders.size > 0) {
-			runAnalysisInBackground({
-				workspaceId: workspace_id,
-				userId: user_id,
-				provider,
-				jobGroupId,
-			});
-			}
 		}
 
 		await Promise.all(
@@ -333,8 +335,13 @@ export async function handleJob(job: Job<ProviderJobData>): Promise<boolean> {
 				const outcome = resolveProviderOutcome({
 					captureSucceeded:
 						providerResults[currentProvider].status === "fulfilled",
-					persistenceSucceeded: persistedProviders.has(currentProvider),
-					resultCount: providerResults[currentProvider].data.length,
+					capturedResultCount:
+						providerResults[currentProvider].data.length,
+					expectedResultCount: prompts.length,
+					persistenceSucceeded:
+						persistenceSucceededProviders.has(currentProvider),
+					persistedResultCount:
+						persistedResultCounts[currentProvider] ?? 0,
 				});
 				return updateProviderProgress({
 					jobGroupId,

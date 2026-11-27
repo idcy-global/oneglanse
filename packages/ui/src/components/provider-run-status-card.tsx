@@ -1,11 +1,12 @@
 "use client";
 
 import { cn, getModelFavicon, getProviderDisplayName } from "@oneglanse/utils";
-import { CheckCircle2, StopCircle, XCircle } from "lucide-react";
+import { CheckCircle2, Sparkles, StopCircle, XCircle } from "lucide-react";
 
 export type ProviderRunDisplayPhase =
 	| "pending"
 	| "running"
+	| "analyzing"
 	| "completed"
 	| "failed"
 	| "stopped";
@@ -37,8 +38,9 @@ export function ProviderRunStatusCard(props: {
 		promptNumber,
 		totalPrompts,
 	} = props;
-	const title = getProviderDisplayName(provider);
-	const isActive = phase === "running" || phase === "pending";
+	const title = phase === "analyzing" ? "GEO Analysis" : getProviderDisplayName(provider);
+	const isActive =
+		phase === "running" || phase === "pending" || phase === "analyzing";
 	const canStop = phase === "running" && Boolean(onStop) && !isStopping;
 
 	const showProgress =
@@ -61,7 +63,8 @@ export function ProviderRunStatusCard(props: {
 			}
 			return "Running prompts, please wait…";
 		}
-		if (phase === "completed") return "Responses saved.";
+		if (phase === "analyzing") return "Analyzing saved answers and preparing your GEO report…";
+		if (phase === "completed") return "Responses and GEO analysis saved.";
 		if (phase === "stopped") return "Stopped at your request.";
 		return "This provider needs another attempt.";
 	}
@@ -87,11 +90,17 @@ export function ProviderRunStatusCard(props: {
 								logoGlow,
 							)}
 						/>
-						<img
-							src={getModelFavicon(provider)}
-							alt={title}
-							className="relative h-7 w-7 rounded-lg object-contain"
-						/>
+						{phase === "analyzing" ? (
+							<div className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-200">
+								<Sparkles className="h-4 w-4" />
+							</div>
+						) : (
+							<img
+								src={getModelFavicon(provider)}
+								alt={title}
+								className="relative h-7 w-7 rounded-lg object-contain"
+							/>
+						)}
 					</div>
 
 					{/* Text — re-animates on provider / phase change */}
@@ -109,7 +118,9 @@ export function ProviderRunStatusCard(props: {
 									? "text-gray-400 dark:text-gray-500"
 									: phase === "running"
 										? "text-gray-500 dark:text-gray-400"
-										: phase === "completed"
+										: phase === "analyzing"
+									? "text-gray-500 dark:text-gray-400"
+								: phase === "completed"
 											? "text-emerald-600 dark:text-emerald-400"
 											: phase === "stopped"
 												? "text-slate-500 dark:text-slate-400"

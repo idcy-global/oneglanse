@@ -36,6 +36,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"@colbymchenry/codegraph": "1.6.0",
+		"@oneglanse/services": "workspace:*",
+		"@oneglanse/types": "workspace:*",
 		"knip": "^5.85.0",
 		"turbo": "^2.3.3",
 		"typescript": "^5.9.3"
